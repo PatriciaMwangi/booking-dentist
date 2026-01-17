@@ -1,0 +1,12 @@
+# --- Database & Security ---
+config.php
+
+# --- Logs & Error Reports ---
+*.log
+error_log
+npm-debug.log*
+
+# --- Environment Files ---
+.env
+.env.local
+

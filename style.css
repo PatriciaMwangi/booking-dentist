@@ -1,0 +1,518 @@
+/* style.css */
+body { 
+    font-family: Arial, sans-serif; 
+    margin: 0; 
+    display: flex; 
+    background-color: #f4f7f6;
+}
+
+/* Sidebar Styling */
+.sidebar {
+    width: 250px;
+    background-color: #fff;
+    border-right: 1px solid #eee;
+    height: 100vh;
+    position: fixed;
+    left: 0;
+    top: 0;
+    display: flex;
+    flex-direction: column; /* Stack sections vertically */
+    overflow-y: auto; /* Enable scroll if content exceeds screen */
+    z-index: 1000;
+}
+
+.sidebar-header {
+    padding: 20px;
+    font-weight: bold;
+    color: #2c3e50;
+    border-bottom: 1px solid #eee;
+}
+
+/* Push the logout link to the very bottom */
+.logout-link {
+    color: #c0392b !important;
+    margin-top: auto; /* Magic property to push to bottom */
+    border-top: 1px solid #eee;
+    padding-top: 20px;
+}
+
+.sidebar-badge {
+    background-color: #3498db;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.8rem;
+}
+
+/* Custom Scrollbar Styling (Optional - for a cleaner look) */
+.sidebar::-webkit-scrollbar {
+    width: 6px;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+    background-color: #ddd;
+    border-radius: 10px;
+}
+
+
+.sidebar-item { 
+ padding: 15px 20px;
+display: flex;
+align-items: center;
+text-decoration: none;
+color: #333;
+border-bottom: 1px solid #f9f9f9;
+transition: background 0.3s;
+}
+
+.sidebar-item:hover { 
+    background-color: #f9f9f9; 
+}
+
+.sidebar-item.active {
+    background-color: #f0f0f0;
+    font-weight: bold;
+}
+
+/* Main Content Area */
+.main-content { 
+    margin-left: 250px; 
+    padding: 30px; 
+    width: calc(100% - 250px); 
+}
+
+/* Calendar Container */
+#calendar { 
+    max-width: 1000px; 
+    background: white; 
+    padding: 20px; 
+    border-radius: 8px; 
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
+}
+
+table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+th { background-color: #f8f9fa; }
+/* .filter-group h4 { margin: 0 0 10px 0; color: #666; font-size: 14px; } */
+    .checkbox-item { display: block; margin-bottom: 5px; font-size: 13px; }
+    
+    table { background: #fff; border-radius: 8px; overflow: hidden; border: none; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+    th { background-color: #f8f9fa; color: #333; text-transform: uppercase; font-size: 12px; letter-spacing: 0.5px; }
+    tr:hover { background-color: #fcfcfc; }
+    .status-badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; }
+/* Sidebar Form Styles */
+.sidebar-filter-container {
+    padding: 20px;
+    border-top: 1px solid #eee;
+    margin-top: 10px;
+}
+
+.filter-group h4 {
+    margin: 15px 0 10px 0;
+    font-size: 13px;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    
+}
+
+.checkbox-item {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 14px;
+    color: #444;
+    cursor: pointer;
+}
+
+.btn-apply {
+    width: 100%;
+    background: #3498db;
+    color: #fff;
+    border-radius: 4px;
+    border: none;
+    padding: 10px;
+    margin-top: 15px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.btn-clear {
+    display: block;
+    text-align: center;
+    font-size: 12px;
+    color: #999;
+    margin-top: 10px;
+    text-decoration: none;
+}
+.disc-filter-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 25px;
+    padding: 10px 0;
+}
+
+.disc-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%; /* Makes it a circle */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    text-decoration: none;
+    font-weight: bold;
+    font-size: 14px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.disc-btn:hover {
+    transform: scale(1.1); /* Slight pop effect */
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+}
+
+.disc-btn:active {
+    transform: scale(0.95);
+}
+/* Registration Form Specifics */
+/* Modern Background with Blue/Purple Gradient */
+body {
+    background:  #f0f0f0ce;
+       min-height: 100vh;
+    margin: 0;
+    display: flex;
+}
+
+/* High-End Card Styling */
+.registration-card {
+    background: #ffffff;
+    padding: 40px;
+    border-radius: 16px; /* Softer corners */
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2); /* Deeper shadow for "lift" */
+    max-width: 550px;
+    width: 100%;
+    margin: 40px auto;
+    border-top: 5px solid #2980b9; /* Solid blue accent at the top */
+}
+
+.registration-card h2 {
+    color: #2c3e50;
+    text-align: center;
+    margin-bottom: 30px;
+    font-size: 24px;
+    letter-spacing: 1px;
+}
+
+/* Form Grouping */
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #34495e;
+    font-size: 14px;
+}
+
+.form-group input, .form-group select {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 15px;
+    transition: all 0.3s ease;
+}
+
+/* Focus state using Purple accent */
+.form-group input:focus, .form-group select:focus {
+    border-color: #8e44ad;
+    outline: none;
+    box-shadow: 0 0 8px rgba(142, 68, 173, 0.2);
+}
+
+/* Multi-select specific height */
+.multi-select {
+    height: 100px;
+    background-color: #fdfdfd;
+}
+
+/* Container for row alignment */
+.filter-actions-group {
+    display: flex;
+    gap: 10px;
+    align-items: center; /* Vertical centering */
+}
+
+/* Base styles for both buttons to ensure uniformity */
+.btn-primary, .btn-reset {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 42px; /* Fixed height for perfect alignment */
+    padding: 0 20px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    text-decoration: none;
+    cursor: pointer;
+    box-sizing: border-box; /* Includes padding in height calculation */
+    transition: all 0.3s ease;
+    border: none;
+    margin: 0; /* Remove default margins */
+}
+
+/* Primary Specifics */
+.btn-primary {
+    background: linear-gradient(to right, #3498db, #2980b9);
+    color: white;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(to right, #2980b9, #3498db);
+    transform: translateY(-1px);
+}
+
+/* Reset Specifics */
+.btn-reset {
+    background-color: #e74c3c;
+    color: white;
+}
+
+.btn-reset:hover {
+    background-color: #c0392b;
+    transform: translateY(-1px);
+}
+/* Messages */
+.msg {
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 25px;
+    text-align: center;
+    font-weight: 500;
+}
+.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+/* Checkbox Grid Layout */
+.checkbox-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Two columns */
+    gap: 10px;
+    margin-top: 10px;
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid #eee;
+}
+
+/* Individual Checkbox "Card" Style */
+.checkbox-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.checkbox-card:hover {
+    border-color: #3498db; /* Dominant Blue */
+    background: #f0f7ff;
+}
+
+/* Custom Checkbox Color */
+.checkbox-card input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: #8e44ad; /* Purple accent for the actual checkmark */
+    cursor: pointer;
+}
+
+.checkbox-card span {
+    font-size: 14px;
+    color: #2c3e50;
+    font-weight: 500;
+}
+
+/* Highlight card when checked */
+.checkbox-card:has(input:checked) {
+    border-color: #8e44ad;
+    background: #f4ebff;
+}
+/* Floating Toast Notification */
+.toast-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 15px 25px;
+    border-radius: 8px;
+    color: white;
+    font-weight: bold;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 1000;
+    animation: slideIn 0.5s ease-out;
+}
+
+.toast-notification.success { background-color: #2ecc71; }
+.toast-notification.error { background-color: #e74c3c; }
+
+@keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+/* Checkbox Grid adjustment for manage services */
+.checkbox-grid {
+    display: grid;
+    grid-template-columns: 1fr; /* Single column for the management list */
+    gap: 8px;
+}
+
+.checkbox-card span {
+    font-weight: 600;
+    color: #2c3e50;
+}
+.date-filter-form {
+    display: flex;
+    gap: 20px;
+    align-items: flex-end;
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    margin-bottom: 30px;
+    border-left: 5px solid #29b93c; /* Consistent Blue Accent */
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.filter-group label {
+    font-size: 0.85rem;
+    font-weight: bold;
+    color: #34495e;
+}
+
+.filter-group input[type="date"] {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-family: inherit;
+}
+
+
+.btn-reset:hover {
+    background-color: #c0392b; /* Darker red on hover */
+    color: white;
+    box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
+}
+/* Dentist View Table Styles */
+.dentist-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+.dentist-table th, .dentist-table td {
+    padding: 15px;
+    border-bottom: 1px solid #eee;
+    text-align: left;
+}
+
+.service-tag {
+    background: #f4ebff; /* Subtle Purple tint */
+    color: #8e44ad;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.calendar-link {
+    font-size: 1.5rem;
+    text-decoration: none;
+    transition: transform 0.2s;
+    display: inline-block;
+}
+
+.calendar-link:hover {
+    transform: scale(1.3);
+}
+.sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 12px; /* Ensures the icon doesn't touch the text */
+    padding: 12px 20px;
+    text-decoration: none;
+    color: #34495e;
+    transition: all 0.3s ease;
+}
+/* Container for the single-row filters */
+.filter-row-container {
+    display: flex;
+    align-items: flex-end;
+    gap: 15px;
+    margin-bottom: 25px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.filter-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.filter-input-group label {
+    font-size: 0.75rem;
+    font-weight: bold;
+    color: #34495e;
+    text-transform: uppercase;
+}
+
+.filter-input-group input, .filter-input-group select {
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
+.filter-actions-group {
+    display: flex;
+    gap: 10px;
+}
+
+/* "YOU" Badge for current user */
+.user-badge {
+    background: #2ecc71;
+    color: white;
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+.own-row {
+    background-color: #f0fff4; /* Light green tint for your own row */
+}
+#calendar {
+    max-width: 1100px;
+    margin: 0 auto;
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+/* Ensure the time-grid lines are visible for the 24-hour view */
+.fc-timegrid-slot {
+    height: 3em !important; 
+    border-bottom: 1px solid #eee !important;
+}
