@@ -1,7 +1,6 @@
 <?php
 // ajax_fetch_patient.php
-require_once 'config.php';
-
+require_once 'db.php';
 // Clear any accidental output/whitespace to ensure clean JSON
 if (ob_get_length()) ob_clean(); 
 

@@ -1,6 +1,5 @@
 <?php
-require_once 'config.php';
-
+require_once 'db.php';
 $message = "";
 $message_type = "";
 // 1. CATCH CALENDAR DATA

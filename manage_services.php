@@ -1,5 +1,5 @@
 <?php
-require_once 'config.php';
+require_once 'db.php';
 session_start();
 
 $current_page = 'manage_services';

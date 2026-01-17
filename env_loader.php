@@ -1,5 +1,4 @@
 <?php
-// env_loader.php
 function loadEnv($path) {
     if (!file_get_contents($path)) return;
 

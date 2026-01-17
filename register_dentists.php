@@ -1,5 +1,5 @@
 <?php
-require_once 'config.php';
+require_once 'db.php';
 session_start();
 
 // SECURITY: Only allow existing superintendents to access this page

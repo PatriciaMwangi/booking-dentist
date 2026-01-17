@@ -1,5 +1,5 @@
 <?php
-require_once 'config.php'; // Ensure this is first!
+require_once 'db.php';
 session_start();
 
 $current_page = 'view_dentists';
