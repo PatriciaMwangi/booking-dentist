@@ -1,6 +1,5 @@
 <?php
 require_once 'db.php';
-session_start();
 $current_page = 'dentist';
 
 if (!isset($_SESSION['dentist_id'])) {
