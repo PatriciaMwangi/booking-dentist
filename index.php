@@ -2,150 +2,112 @@
 require_once 'db.php';
 $message = "";
 $message_type = "";
-// 1. CATCH CALENDAR DATA
-// FullCalendar sends a string like "2026-01-08T10:30:00"
-$pre_date = "";
-$pre_time = "";
-$target_dentist_id = $_GET['dentist_id'] ?? null;
+// Clean the input to ensure it fits the datetime-local format (YYYY-MM-DDTHH:MM)
+$pre_start = isset($_GET['start']) ? date('Y-m-d\TH:i', strtotime($_GET['start'])) : '';
+$pre_end   = isset($_GET['end']) ? date('Y-m-d\TH:i', strtotime($_GET['end'])) : '';
+$dentist_id_from_url = $_GET['dentist_id'] ?? '';
 
-if (isset($_GET['start'])) {
-    try {
-        $dt = new DateTime($_GET['start']);
-        $pre_date = $dt->format('Y-m-d');
-        $pre_time = $dt->format('H:i');
-    } catch (Exception $e) {
-        // Fallback if date parsing fails
-    }
-}
-
-// 2. AJAX ENDPOINT FOR AUTO-FETCH
-// If this script is called with ?fetch_phone=..., return JSON and exit
+// 1. AJAX ENDPOINT FOR AUTO-FETCH (Keep this at the top)
 if (isset($_GET['fetch_phone'])) {
     header('Content-Type: application/json');
     $phone = trim($_GET['fetch_phone']);
-    
     $stmt = $pdo->prepare("SELECT patient_name, email FROM patients WHERE phone = ? LIMIT 1");
     $stmt->execute([$phone]);
     $patient = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    if ($patient) {
-        // Found a patient: return their data
-        echo json_encode([
-            'success' => true,
-            'patient_name' => $patient['patient_name'],
-            'email' => $patient['email']
-        ]);
-    } else {
-        // No patient found: return a fail state
-        echo json_encode(['success' => false]);
-    }
+    echo json_encode($patient ? array_merge(['success' => true], $patient) : ['success' => false]);
     exit();
 }
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    // 1. Sanitize
-    $name    = htmlspecialchars(strip_tags(trim($_POST['patient_name'])));
-    $email   = filter_var(trim($_POST['email']), FILTER_SANITIZE_EMAIL);
-    $phone   = htmlspecialchars(strip_tags(trim($_POST['phone'])));
-    $service = htmlspecialchars(strip_tags(trim($_POST['service'])));
-    $date    = $_POST['appointment_date'];
-    $time    = $_POST['appointment_time'];
-    $notes   = htmlspecialchars(strip_tags(trim($_POST['notes'])));
-    $today   = date('Y-m-d');
-
-   try {
-    // 2. Handle Patient (Get ID or Create New)
-    $stmt = $pdo->prepare("SELECT patient_id FROM patients WHERE email = ?");
-    $stmt->execute([$email]);
-    $patient = $stmt->fetch();
-
-  if ($patient) {
-    $patient_id = $patient['patient_id'];
-    
-    // 3. CHECK FOR CONFLICT: Same Patient, Same Date, Same Time, Same Dentist
-    // We only throw an error if all these factors match exactly.
-    $checkStmt = $pdo->prepare("
-        SELECT id FROM appointments 
-        WHERE patient_id = ? 
-        AND appointment_date = ? 
-        AND appointment_time = ? 
-        AND dentist_id = ?
-        AND status != 'Cancelled'
-    ");
-    $checkStmt->execute([$patient_id, $date, $time, $dentist_id]);
-    
-    if ($checkStmt->fetch()) {
-        throw new Exception("This patient already has an appointment with this dentist at $time on $date.");
-    }
-} else {
-    // New Patient: Insert into patients table
-    $insPatient = $pdo->prepare("INSERT INTO patients (patient_name, email, phone) VALUES (?, ?, ?)");
-    $insPatient->execute([$name, $email, $phone]);
-    $patient_id = $pdo->lastInsertId();
-}
-   // 4. FIND A DENTIST
-// 4. FIND A DENTIST (Session Priority)
-    // Check session first, then forced hidden field, then fallback to random
-    if (!empty($_SESSION['dentist_id'])) {
-        $dentist_id = $_SESSION['dentist_id'];
-    } elseif (!empty($_POST['forced_dentist_id'])) {
-        $dentist_id = $_POST['forced_dentist_id'];
-    }
-
-    if (isset($dentist_id)) {
-        // Fetch the name for the success message
-        $dStmt = $pdo->prepare("SELECT dentist_name FROM dentists WHERE dentist_id = ?");
-        $dStmt->execute([$dentist_id]);
-        $dentist_name = $dStmt->fetchColumn();
-    } else {
-        // Fallback: Random assignment based on service
-        $dentistStmt = $pdo->prepare("
-            SELECT d.dentist_id, d.dentist_name 
-            FROM dentists d 
-            JOIN specializations s ON d.dentist_id = s.dentist_id 
-            WHERE s.service_name = ? 
-            ORDER BY RAND() LIMIT 1
-        ");
-        $dentistStmt->execute([$service]);
-        $assigned_dentist = $dentistStmt->fetch();
+    try {
+        // Sanitize Inputs
+        $name    = htmlspecialchars(strip_tags(trim($_POST['patient_name'])));
+        $email   = filter_var(trim($_POST['email']), FILTER_SANITIZE_EMAIL);
+        $phone   = htmlspecialchars(strip_tags(trim($_POST['phone'])));
+        $service = htmlspecialchars(strip_tags(trim($_POST['service'])));
+        $notes   = htmlspecialchars(strip_tags(trim($_POST['notes'])));
         
-        if (!$assigned_dentist) {
-            throw new Exception("No dentist found for the selected service.");
+        $start_input = $_POST['start_time'];
+        $end_input   = $_POST['end_time'];
+        
+        $start = new DateTime($start_input);
+        $end   = new DateTime($end_input);
+
+        // 2. Logic Check: End after Start?
+        if ($start >= $end) {
+            throw new Exception("Error: The end time must be after the start time.");
         }
+
+        // 3. Forced 1-Hour Logic for Patients
+        $is_dentist = (isset($_SESSION['role']) && $_SESSION['role'] === 'dentist');
+        if (!$is_dentist) {
+            $expected_end = clone $start;
+            $expected_end->modify('+1 hour');
+            if ($end != $expected_end) {
+                $end = $expected_end; // Force it to 1 hour
+            }
+        }
+
+        // 4. Handle Dentist ID
+        $dentist_id = $_POST['dentist_id'] ?? $_SESSION['dentist_id'] ?? null;
+        if (!$dentist_id) {
+            throw new Exception("Please select a dentist.");
+        }
+
+        // 5. Consolidated Overlap Check
+        $sql_check = "SELECT COUNT(*) FROM appointments 
+                      WHERE dentist_id = :d_id 
+                      AND status != 'Cancelled'
+                      AND (start_time < :end AND end_time > :start)";
+        $stmt_check = $pdo->prepare($sql_check);
+        $stmt_check->execute([
+            'd_id'  => $dentist_id,
+            'start' => $start->format('Y-m-d H:i:s'),
+            'end'   => $end->format('Y-m-d H:i:s')
+        ]);
+
+        if ($stmt_check->fetchColumn() > 0) {
+            throw new Exception("This time slot is already booked. Please choose another time.");
+        }
+
+        // 6. Patient Management
+        $stmt = $pdo->prepare("SELECT patient_id FROM patients WHERE email = ?");
+        $stmt->execute([$email]);
+        $patient = $stmt->fetch();
+
+        if ($patient) {
+            $patient_id = $patient['patient_id'];
+        } else {
+            $insPatient = $pdo->prepare("INSERT INTO patients (patient_name, email, phone) VALUES (?, ?, ?)");
+            $insPatient->execute([$name, $email, $phone]);
+            $patient_id = $pdo->lastInsertId();
+        }
+
+        // 7. Insert Appointment using new columns
+        $sql = "INSERT INTO appointments (patient_id, dentist_id, service, start_time, end_time, notes, status) 
+                VALUES (:p_id, :d_id, :service, :start, :end, :notes, 'Pending')";
         
-        $dentist_id = $assigned_dentist['dentist_id'];
-        $dentist_name = $assigned_dentist['dentist_name'];
-    }
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([
+            ':p_id'    => $patient_id,
+            ':d_id'    => $dentist_id,
+            ':service' => $service,
+            ':start'   => $start->format('Y-m-d H:i:s'),
+            ':end'     => $end->format('Y-m-d H:i:s'),
+            ':notes'   => $notes
+        ]);
 
-    // 5. Insert the Appointment
-    $sql = "INSERT INTO appointments (patient_id, dentist_id, service, appointment_date, appointment_time, notes) 
-            VALUES (:p_id, :d_id, :service, :date, :time, :notes)";
-    
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([
-        ':p_id'    => $patient_id,
-        ':d_id'    => $dentist_id,
-        ':service' => $service,
-        ':date'    => $date,
-        ':time'    => $time,
-        ':notes'   => $notes
-    ]);
-
-    // 6. REDIRECT BACK TO CALENDAR
-    // If a dentist is in session, we return them to their specific dashboard
-    if (!empty($_SESSION['dentist_id'])) {
-        header("Location: dentist.php?dentist_id=" . $_SESSION['dentist_id'] . "&booked=success");
+        // Success Redirect
+        $redirect = $is_dentist ? "dentist.php?booked=success" : "index.php?booked=success";
+        header("Location: $redirect");
         exit();
+
+    } catch (Exception $e) {
+        $message = $e->getMessage();
+        $message_type = "error";
     }
-
-    $message = "Appointment successfully booked with $dentist_name for $date!";
-    $message_type = "success";
-} catch (Exception $e) {
-    $message = $e->getMessage();
-    $message_type = "error";
-}}
+}
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -170,11 +132,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <body>
 
 <div class="form-container">
-    <div style="text-align: right; margin-bottom: 10px;">
-    <a href="login.php" style="text-decoration: none; font-size: 14px; color: #3498db; border: 1px solid #3498db; padding: 5px 10px; border-radius: 4px;">
-        Dentist Login
-    </a>
-</div>
+    <?php if (!isset($_SESSION['dentist_id'])): ?>
+        <div style="text-align: right; margin-bottom: 10px;">
+            <a href="login.php" style="text-decoration: none; font-size: 14px; color: #3498db; border: 1px solid #3498db; padding: 5px 10px; border-radius: 4px;">
+                Dentist Login
+            </a>
+        </div>
+    <?php endif; ?>
+
     <h2>Book Your Dental Visit</h2>
 
 
@@ -185,7 +150,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <?php endif; ?>
 
     <form action="" method="POST">
-        <input type="hidden" name="forced_dentist_id" value="<?php echo htmlspecialchars($target_dentist_id); ?>">
+        <input type="hidden" name="forced_dentist_id" value="<?= htmlspecialchars($dentist_id_from_url) ?>">
 
 <div class="form-group">
     <label for="phone">Phone Number *</label>
@@ -218,17 +183,19 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             </select>
         </div>
 
-        <div style="display: flex; gap: 10px;">
-            <div class="form-group" style="flex: 1;">
-                <label for="appointment_date">Preferred Date *</label>
-                <input type="date" id="appointment_date" name="appointment_date" required min="<?php echo date('Y-m-d'); ?>">
-            </div>
-            <div class="form-group" style="flex: 1;">
-                <label for="appointment_time">Preferred Time *</label>
-                <input type="time" id="appointment_time" name="appointment_time" required>
-            </div>
-        </div>
-
+<div style="display: flex; gap: 10px;">
+    <div class="form-group" style="flex: 1;">
+        <label for="start_time">Start Date & Time *</label>
+        <input type="datetime-local" id="start_time" name="start_time" 
+               required value="<?= $pre_start ?>" 
+               min="<?= date('Y-m-d\TH:i') ?>">
+    </div>
+    <div class="form-group" style="flex: 1;">
+        <label for="end_time">End Date & Time *</label>
+        <input type="datetime-local" id="end_time" name="end_time" 
+               required value="<?= $pre_end ?>">
+    </div>
+</div>
         <div class="form-group">
             <label for="notes">Additional Notes</label>
             <textarea id="notes" name="notes" rows="3" placeholder="Any symptoms or specific concerns?"></textarea>
@@ -259,7 +226,6 @@ document.getElementById('phone').addEventListener('blur', function() {
             ]);
         };
         
-        // Try direct URL first (since you said path 3 works manually)
         const directUrl = '/booking-dentist/ajax_fetch_patient.php?fetch_phone=' + encodeURIComponent(cleanPhone);
         
         console.log('Attempting fetch to:', directUrl);
@@ -295,17 +261,46 @@ document.getElementById('phone').addEventListener('blur', function() {
         .then(data => {
             console.log('Received data:', data);
             
-            if (data.success) {
-                document.getElementById('patient_name').value = data.patient_name || '';
-                document.getElementById('email').value = data.email || '';
-                statusMsg.innerText = "Found: " + data.patient_name;
-                statusMsg.style.color = "#27ae60";
-            } else {
-                document.getElementById('patient_name').value = '';
-                document.getElementById('email').value = '';
-                statusMsg.innerText = "New patient detected.";
-                statusMsg.style.color = "#e67e22";
-            }
+
+if (data.success) {
+    const nameInput = document.getElementById('patient_name');
+    const emailInput = document.getElementById('email');
+
+    nameInput.value = data.patient_name || '';
+    emailInput.value = data.email || '';
+    
+    // Make fields non-editable
+    nameInput.readOnly = true;
+    emailInput.readOnly = true;
+    
+    // Visual feedback for non-editable state
+    nameInput.style.backgroundColor = "#f0f0f0";
+    emailInput.style.backgroundColor = "#f0f0f0";
+    nameInput.style.cursor = "not-allowed";
+    emailInput.style.cursor = "not-allowed";
+
+statusMsg.innerText = "Found: " + data.patient_name + "\n(ID Fields are now non-editable)";
+    statusMsg.style.color = "#ec1c73";
+} else {
+    const nameInput = document.getElementById('patient_name');
+    const emailInput = document.getElementById('email');
+
+    nameInput.value = '';
+    emailInput.value = '';
+    
+    // Ensure fields are editable for new patients
+    nameInput.readOnly = false;
+    emailInput.readOnly = false;
+    
+    // Reset visual styles
+    nameInput.style.backgroundColor = "";
+    emailInput.style.backgroundColor = "";
+    nameInput.style.cursor = "auto";
+    emailInput.style.cursor = "auto";
+
+    statusMsg.innerText = "New patient detected.";
+    statusMsg.style.color = "#e67e22";
+}
         })
         .catch(error => {
             console.error('Fetch error details:', error);

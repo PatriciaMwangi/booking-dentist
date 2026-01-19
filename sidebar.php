@@ -31,42 +31,75 @@ $total_services = $service_count_query->fetchColumn();
             <?php endif; ?>
         </a>
     <?php endif; ?>
+<?php if ($current_page == 'schedule' || $current_page == 'view_dentists'): ?>
+    <div class="sidebar-filter-container">
+        <form method="GET" action="<?= $current_page ?>.php">
+            
+           <?php if ($current_page == 'schedule'): ?>
+    <div class="filter-group">
+        <h4>Schedule View</h4>
+        <label class="checkbox-item" style="font-weight: bold; color: #3498db; background: #f0f7ff; padding: 8px; border-radius: 4px; margin-bottom: 15px;">
+            <input type="checkbox" name="show_all" value="1" <?= isset($_GET['show_all']) ? 'checked' : '' ?>> 
+            Show All Schedules
+        </label>
 
-    <?php if ($current_page == 'schedule' || $current_page == 'view_dentists'): ?>
-        <div class="sidebar-filter-container">
-            <form method="GET" action="<?= $current_page ?>.php">
+        <h4>Filter by Dentist</h4>
+        <?php 
+        // Sort the list so the session dentist is always at index 0
+        usort($dentists_list, function($a, $b) use ($session_id) {
+            if ($a['dentist_id'] == $session_id) return -1;
+            if ($b['dentist_id'] == $session_id) return 1;
+            return 0;
+        });
+
+        foreach($dentists_list as $d): 
+            $is_me = ($d['dentist_id'] == $session_id); // Check if this is the logged-in user
+        ?>
+            <label class="checkbox-item" style="<?= $is_me ? 'color: #2ecc71; font-weight: bold; background: #eafaf1; border-radius: 4px; padding: 2px 5px;' : '' ?>">
+                <input type="checkbox" name="dentists[]" value="<?= $d['dentist_id'] ?>" 
+                <?= in_array($d['dentist_id'], $filter_dentists) ? 'checked' : '' ?>> 
                 
-                <?php if ($current_page == 'schedule'): ?>
-                    <div class="filter-group">
-                        <h4>Filter by Dentist</h4>
-                        <?php foreach($dentists_list as $d): ?>
-                            <label class="checkbox-item">
-                                <input type="checkbox" name="dentists[]" value="<?= $d['dentist_id'] ?>" 
-                                <?= in_array($d['dentist_id'], $filter_dentists ?? []) ? 'checked' : '' ?>> <?= htmlspecialchars($d['dentist_name']) ?>
-                            </label>
-                        <?php endforeach; ?>
-                    </div>
+                <?= htmlspecialchars($d['dentist_name']) ?>
+                
+                <?php if ($is_me): ?>
+                    <small style="background: #2ecc71; color: white; padding: 1px 4px; border-radius: 3px; margin-left: 5px; font-size: 0.7rem;">YOU</small>
                 <?php endif; ?>
+            </label>
+        <?php endforeach; ?>
+    </div>
+<?php endif; ?>
+<?php if ($current_page == 'view_dentists'): ?>
+    <div class="filter-group">
+        <h4>Filter by Services</h4>
+        
+        <label class="checkbox-item" style="font-weight: bold; color: #3498db; border-bottom: 1px solid #eee; margin-bottom: 10px; padding-bottom: 8px;">
+            <input type="checkbox" id="select-all-services"> 
+            Select All Services
+        </label>
 
-                <div class="filter-group">
-                    <h4>Filter by Service</h4>
-                    <?php foreach($services_list as $s): ?>
-                        <label class="checkbox-item">
-                            <input type="checkbox" name="services[]" value="<?= $s ?>" 
-                            <?php 
-                                $active_filters = $filter_services ?? ($_GET['services'] ?? []);
-                                echo in_array($s, $active_filters) ? 'checked' : ''; 
-                            ?>> <?= htmlspecialchars($s) ?>
-                        </label>
-                    <?php endforeach; ?>
-                </div>
-
-                <button type="submit" class="btn-apply">Apply Filters</button>
-                <a href="<?= $current_page ?>.php" class="btn-clear">Clear All</a>
-            </form>
+        <div class="services-scroll-container" style="max-height: 250px; overflow-y: auto;">
+            <?php 
+            // Fetch all unique services for the filter
+            $all_services = $pdo->query("SELECT service_name FROM available_services ORDER BY service_name ASC")->fetchAll(PDO::FETCH_COLUMN);
+            $active_services = $_GET['services'] ?? [];
+            
+            foreach($all_services as $service): 
+            ?>
+                <label class="checkbox-item">
+                    <input type="checkbox" name="services[]" class="service-checkbox" 
+                           value="<?= htmlspecialchars($service) ?>" 
+                           <?= in_array($service, $active_services) ? 'checked' : '' ?>> 
+                    <?= htmlspecialchars($service) ?>
+                </label>
+            <?php endforeach; ?>
         </div>
-    <?php endif; ?>
-
+    </div>
+<?php endif; ?>
+            <button type="submit" class="btn-apply">Apply Filters</button>
+            <a href="<?= $current_page ?>.php" class="btn-clear">Clear All</a>
+        </form>
+    </div>
+<?php endif; ?>
     <a href="logout.php" class="sidebar-item logout-link">
         🚪 Logout
     </a>

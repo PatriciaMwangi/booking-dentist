@@ -28,31 +28,47 @@ if (!empty($filter_role)) {
     $params[] = $filter_role;
 }
 
+
 // 3. Fix the HAVING clause logic
-$having_clause = "";
+// --- 3. STRICT "AND" FILTERING ---
+// This ensures only dentists providing ALL selected services are shown.
 if (!empty($sidebar_services)) {
-    $having_parts = [];
-    foreach ($sidebar_services as $s) {
-        $having_parts[] = "GROUP_CONCAT(s.service_name) LIKE ?";
-        $params[] = "%$s%";
+    $placeholders = str_repeat('?,', count($sidebar_services) - 1) . '?';
+    $service_count = count($sidebar_services);
+
+    $query_parts[] = "d.dentist_id IN (
+        SELECT dentist_id 
+        FROM specializations 
+        WHERE service_name IN ($placeholders)
+        GROUP BY dentist_id 
+        HAVING COUNT(DISTINCT service_name) = ?
+    )";
+    
+    // Add each selected service to params
+    foreach ($sidebar_services as $s) { 
+        $params[] = $s; 
     }
-    // Joining multiple service filters with OR (or AND depending on preference)
-    $having_clause = "HAVING " . implode(' OR ', $having_parts);
+    // Add the count for the HAVING check
+    $params[] = $service_count;
 }
 
-// 4. SQL Query - Added dentist_id to GROUP BY to avoid strict mode errors
+// --- 4. FINAL SQL QUERY ---
+// We use a subquery for services so we don't need a GROUP BY in the main query.
 $sql = "SELECT d.dentist_id, d.dentist_name, d.role,
-        GROUP_CONCAT(s.service_name SEPARATOR ', ') as services
+        (SELECT GROUP_CONCAT(service_name SEPARATOR ', ') 
+         FROM specializations 
+         WHERE dentist_id = d.dentist_id) as services
         FROM dentists d
-        LEFT JOIN specializations s ON d.dentist_id = s.dentist_id
         WHERE " . implode(' AND ', $query_parts) . "
-        GROUP BY d.dentist_id, d.dentist_name, d.role
-        $having_clause
         ORDER BY (d.dentist_id = ?) DESC, d.dentist_name ASC";
 
+// Add the session ID for the custom "ORDER BY" (to put YOU first)
 $params[] = $_SESSION['dentist_id'];
+
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
+// Fetch into an array so we can check if it's empty in the HTML
+$dentist_results = $stmt->fetchAll();
 ?>
 <!DOCTYPE html>
 <html>
@@ -103,30 +119,55 @@ $stmt->execute($params);
                     <th style="text-align: center;">View Schedule</th>
                 </tr>
             </thead>
-            <tbody>
-                <?php while($row = $stmt->fetch()): ?>
-                <tr style="<?= ($row['dentist_id'] == $_SESSION['dentist_id']) ? 'background-color: #f0fff4;' : '' ?>">
-                    <td>
-                        <strong>Dr. <?= htmlspecialchars($row['dentist_name']) ?></strong>
-                        <?php if($row['dentist_id'] == $_SESSION['dentist_id']): ?>
-                            <span style="background: #2ecc71; color: white; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; margin-left: 8px;">YOU</span>
-                        <?php endif; ?>
-                    </td>
-                    <td>
-                        <?php if($row['services']): ?>
-                            <?php foreach(explode(', ', $row['services']) as $service): ?>
-                                <span class="service-tag" style="background: #f4ebff; color: #8e44ad; padding: 4px 10px; border-radius: 20px; font-size: 0.85rem; margin-right: 5px;"><?= htmlspecialchars($service) ?></span>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <small style="color: #999;">No specializations assigned</small>
-                        <?php endif; ?>
-                    </td>
-                    <td style="text-align: center;">
-                        <a href="dentist.php?dentist_id=<?= $row['dentist_id'] ?>" class="calendar-link" style="text-decoration: none; font-size: 1.2rem;">📅</a>
-                    </td>
-                </tr>
-                <?php endwhile; ?>
-            </tbody>
+<tbody>
+    <?php if (empty($dentist_results)): ?>
+        <tr>
+            <td colspan="3" style="text-align: center; padding: 40px; background: #fff;">
+                <div style="font-size: 3rem; margin-bottom: 10px;">🔍</div>
+                <h3 style="color: #666;">🚫 No Dentists Found</h3>
+                <p>No one provides every single service you selected: <br>
+                <strong style="color: #3498db;"><?= htmlspecialchars(implode(', ', $sidebar_services)) ?></strong></p>
+                <a href="view_dentists.php" style="color: #3498db; text-decoration: underline;">Clear all filters</a>
+            </td>
+        </tr>
+    <?php else: ?>
+        <?php foreach ($dentist_results as $row): ?>
+            <?php $is_me = ($row['dentist_id'] == $_SESSION['dentist_id']); ?>
+            <tr style="<?= $is_me ? 'background-color: #f0fff4;' : '' ?>">
+<td>
+    <strong>
+        <?php 
+            $name = htmlspecialchars($row['dentist_name']);
+            // Check if name already starts with Dr. (case-insensitive)
+            if (stripos($name, 'Dr.') === 0) {
+                echo $name;
+            } else {
+                echo 'Dr. ' . $name;
+            }
+        ?>
+    </strong>
+    <?php if($is_me): ?>
+        <span style="background: #2ecc71; color: white; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; margin-left: 8px;">YOU</span>
+    <?php endif; ?>
+</td>
+                <td>
+                    <?php if($row['services']): ?>
+                        <?php foreach(explode(', ', $row['services']) as $service): ?>
+                            <span class="service-tag" style="background: #f4ebff; color: #8e44ad; padding: 4px 10px; border-radius: 20px; font-size: 0.85rem; margin-right: 5px; display: inline-block; margin-bottom: 5px;">
+                                <?= htmlspecialchars($service) ?>
+                            </span>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <small style="color: #999; font-style: italic;">No specializations assigned</small>
+                    <?php endif; ?>
+                </td>
+                <td style="text-align: center;">
+                    <a href="dentist.php?dentist_id=<?= $row['dentist_id'] ?>" class="calendar-link" style="text-decoration: none; font-size: 1.2rem;">📅</a>
+                </td>
+            </tr>
+        <?php endforeach; ?>
+    <?php endif; ?>
+</tbody>
         </table>
     </div>
 </div>
