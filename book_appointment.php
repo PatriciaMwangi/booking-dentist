@@ -6,6 +6,9 @@ $message_type = "";
 $pre_start = isset($_GET['start']) ? date('Y-m-d\TH:i', strtotime($_GET['start'])) : '';
 $pre_end   = isset($_GET['end']) ? date('Y-m-d\TH:i', strtotime($_GET['end'])) : '';
 $dentist_id_from_url = $_GET['dentist_id'] ?? '';
+$phone = "";
+$patient_name = ""; // Match your HTML value names
+$email = "";
 
 // 1. AJAX ENDPOINT FOR AUTO-FETCH (Keep this at the top)
 if (isset($_GET['fetch_phone'])) {
@@ -226,7 +229,7 @@ if (!isset($_SESSION['dentist_id'])) {
 
 <div class="form-group">
     <label for="phone">Phone Number *</label>
-    <input type="tel" id="phone" name="phone" required placeholder="(254) 712-345-678" autocomplete="off"value="<?= htmlspecialchars($_POST['phone_'] ?? $phone) ?>">
+    <input type="tel" id="phone" name="phone" required placeholder="(254) 712-345-678" autocomplete="off"value="<?= htmlspecialchars($_POST['phone'] ?? $phone) ?>">
     <div style="display: flex; justify-content: space-between; align-items: center;">
         <small id="status_msg" style="margin-top:5px; font-weight:bold;"></small>
         <a href="javascript:void(0)" id="reset_form" style="display:none; font-size: 12px; color: #e74c3c; text-decoration: none;">(Reset/Change Patient)</a>
