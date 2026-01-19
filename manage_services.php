@@ -7,6 +7,10 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'superintendent') {
     die("Unauthorized"); 
 }
 
+if (!defined('APP_RUNNING')) {
+    http_response_code(403);
+    die('<h1>403 Forbidden</h1>Direct access to this script is strictly prohibited.');
+}
 // 1. Initial Check for Linked Dentists (Generates the Javascript Popup)
 if (isset($_GET['delete_id']) && !isset($_GET['confirm_delete'])) {
     $id = $_GET['delete_id'];

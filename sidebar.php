@@ -7,24 +7,24 @@ $total_services = $service_count_query->fetchColumn();
 <div class="sidebar">
     <div class="sidebar-header">Clinic Menu</div>
     
-    <a href="dentist.php" class="sidebar-item <?= ($current_page == 'calendar') ? 'active' : '' ?>">
+    <a href="<?= BASE_URL ?>/calendar" class="sidebar-item <?= ($current_page == 'calendar') ? 'active' : '' ?>">
         📅 My Calendar
     </a>
 
-    <a href="view_dentists.php" class="sidebar-item <?= ($current_page == 'view_dentists') ? 'active' : '' ?>">
+    <a href="<?= BASE_URL ?>/dentists" class="sidebar-item <?= ($current_page == 'view_dentists') ? 'active' : '' ?>">
         👩‍⚕️ View All Dentists
     </a>
     
-    <a href="schedule.php" class="sidebar-item <?= ($current_page == 'schedule') ? 'active' : '' ?>">
+    <a href="<?= BASE_URL ?>/schedule" class="sidebar-item <?= ($current_page == 'schedule') ? 'active' : '' ?>">
         📋 View All Schedule
     </a>
     
     <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'superintendent'): ?>
-        <a href="register_dentists.php" class="sidebar-item <?= ($current_page == 'register_dentists') ? 'active' : '' ?>">
+        <a href="<?= BASE_URL ?>/new-dentist" class="sidebar-item <?= ($current_page == 'register_dentists') ? 'active' : '' ?>">
             👤 Register New Dentist
         </a>
         
-        <a href="manage_services.php" class="sidebar-item <?= ($current_page == 'manage_services') ? 'active' : '' ?>" style="display: flex; justify-content: space-between; align-items: center;">
+        <a href="<?= BASE_URL ?>/services" class="sidebar-item <?= ($current_page == 'manage_services') ? 'active' : '' ?>" style="display: flex; justify-content: space-between; align-items: center;">
             <span>⚙️ Manage Services</span>
             <?php if ($total_services > 0): ?>
                 <span class="sidebar-badge"><?= $total_services ?></span>
@@ -33,7 +33,7 @@ $total_services = $service_count_query->fetchColumn();
     <?php endif; ?>
 <?php if ($current_page == 'schedule' || $current_page == 'view_dentists'): ?>
     <div class="sidebar-filter-container">
-        <form method="GET" action="<?= $current_page ?>.php">
+        <form method="GET" action="<?= $current_page ?>">
             
            <?php if ($current_page == 'schedule'): ?>
     <div class="filter-group">
@@ -96,11 +96,11 @@ $total_services = $service_count_query->fetchColumn();
     </div>
 <?php endif; ?>
             <button type="submit" class="btn-apply">Apply Filters</button>
-            <a href="<?= $current_page ?>.php" class="btn-clear">Clear All</a>
+            <a href="<?= $current_page ?>" class="btn-clear">Clear All</a>
         </form>
     </div>
 <?php endif; ?>
-    <a href="logout.php" class="sidebar-item logout-link">
+    <a href="logout" class="sidebar-item logout-link">
         🚪 Logout
     </a>
 </div>

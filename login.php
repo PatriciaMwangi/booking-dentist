@@ -62,8 +62,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         <button type="submit">Sign In</button>
     </form>
     
-    <a href="index.php" class="back-link">← Book Appointments</a>
-</div>
+<?php if (isset($_SESSION['dentist_id'])): ?>
+    <a href="<?= BASE_URL ?>/schedule" class="back-link">← Back to Schedule</a>
+<?php else: ?>
+    <a href="<?= BASE_URL ?>/" class="back-link">← Book Appointments</a>
+<?php endif; ?></div>
 
 </body>
 </html>

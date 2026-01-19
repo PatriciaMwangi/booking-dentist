@@ -8,6 +8,7 @@ $target_dentist = $_GET['dentist_id'] ?? null;
 $is_super = (isset($_SESSION['role']) && $_SESSION['role'] === 'superintendent');
 $session_dentist = $_SESSION['dentist_id'] ?? null;
 
+
 try {
     if ($is_super && !$target_dentist) {
         // GLOBAL VIEW

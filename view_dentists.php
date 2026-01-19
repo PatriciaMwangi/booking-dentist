@@ -2,6 +2,10 @@
 require_once 'db.php';
 
 $current_page = 'view_dentists';
+if (!defined('APP_RUNNING')) {
+    http_response_code(403);
+    die('<h1>403 Forbidden</h1>Direct access to this script is strictly prohibited.');
+}
 
 if (!isset($_SESSION['dentist_id'])) {
     header("Location: login.php");
@@ -84,7 +88,7 @@ $dentist_results = $stmt->fetchAll();
     <div class="registration-card" style="max-width: 1000px;">
         <h2>Clinic Dentists & Specializations</h2>
         
-        <form method="GET" action="view_dentists.php" class="filter-row-container" style="display: flex; align-items: flex-end; gap: 15px; margin-bottom: 25px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+        <form method="GET" action="<?= BASE_URL ?>/dentists" class="filter-row-container" style="display: flex; align-items: flex-end; gap: 15px; margin-bottom: 25px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
             <div class="filter-input-group" style="flex: 2; display: flex; flex-direction: column; gap: 5px;">
                 <label style="font-size: 0.75rem; font-weight: bold; text-transform: uppercase;">Search Dentist</label>
                 <input type="text" name="search_dentist" placeholder="Enter name..." value="<?= htmlspecialchars($search) ?>" style="padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
@@ -102,7 +106,7 @@ $dentist_results = $stmt->fetchAll();
    <div class="filter-actions-group">
     <button type="submit" class="btn-primary">APPLY</button>
     
-    <a href="view_dentists.php" class="btn-reset">CLEAR</a>
+    <a href="<?= BASE_URL ?>/view_dentists" class="btn-reset">CLEAR</a>
 </div>
 </div>
             
@@ -127,7 +131,7 @@ $dentist_results = $stmt->fetchAll();
                 <h3 style="color: #666;">🚫 No Dentists Found</h3>
                 <p>No one provides every single service you selected: <br>
                 <strong style="color: #3498db;"><?= htmlspecialchars(implode(', ', $sidebar_services)) ?></strong></p>
-                <a href="view_dentists.php" style="color: #3498db; text-decoration: underline;">Clear all filters</a>
+                <a href="<?= BASE_URL ?>/view_dentists" style="color: #3498db; text-decoration: underline;">Clear all filters</a>
             </td>
         </tr>
     <?php else: ?>
@@ -161,9 +165,9 @@ $dentist_results = $stmt->fetchAll();
                         <small style="color: #999; font-style: italic;">No specializations assigned</small>
                     <?php endif; ?>
                 </td>
-                <td style="text-align: center;">
-                    <a href="dentist.php?dentist_id=<?= $row['dentist_id'] ?>" class="calendar-link" style="text-decoration: none; font-size: 1.2rem;">📅</a>
-                </td>
+               <td style="text-align: center;">
+    <a href="<?= BASE_URL ?>/calendar?dentist_id=<?= $row['dentist_id'] ?>" class="calendar-link" style="text-decoration: none; font-size: 1.2rem;">📅</a>
+</td>
             </tr>
         <?php endforeach; ?>
     <?php endif; ?>

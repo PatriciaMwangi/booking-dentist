@@ -6,6 +6,10 @@ if (!isset($_SESSION['dentist_id'])) {
     header("Location: login.php");
     exit();
 }
+if (!defined('APP_RUNNING')) {
+    http_response_code(403);
+    die('<h1>403 Forbidden</h1>Direct access to this script is strictly prohibited.');
+}
 
 // Handle Status and Date Updates
 if (isset($_POST['update_status'])) {

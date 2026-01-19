@@ -2,6 +2,11 @@
 require_once 'db.php';
 $current_page = 'dentist';
 
+if (!defined('APP_RUNNING')) {
+    http_response_code(403);
+    die('<h1>403 Forbidden</h1>Direct access to this script is strictly prohibited.');
+}
+
 if (!isset($_SESSION['dentist_id'])) {
     header("Location: login.php");
     exit();

@@ -1,6 +1,11 @@
 <?php
 require_once 'db.php';
 
+if (!defined('APP_RUNNING')) {
+    http_response_code(403);
+    die('<h1>403 Forbidden</h1>Direct access to this script is strictly prohibited.');
+}
+
 // SECURITY: Only allow existing superintendents to access this page
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'superintendent') {
     die("Access Denied: Only a Superintendent can register new users.");
