@@ -173,10 +173,9 @@ if (!isset($_SESSION['dentist_id'])) {
         ]);
 
         // Success Redirect
-        $redirect = $is_dentist ? "dentist.php?booked=success" : "index.php?booked=success";
-        header("Location: $redirect");
-        exit();
-
+        $message = "🎉 Appointment requested successfully! We have assigned a specialist for your " . htmlspecialchars($service) . ".";
+        $message_type = "success";
+        $booking_complete = true; // Flag to hide the form
     } catch (Exception $e) {
         $message = $e->getMessage();
         $message_type = "error";
