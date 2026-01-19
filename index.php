@@ -7,8 +7,11 @@ define('APP_RUNNING', true);
 $base_dir = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/'); 
 
 // 2. DEFINE A GLOBAL BASE URL
-// This creates a reliable prefix for all your links and redirects
-$protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
+// Detect if HTTPS is used directly or via Render's proxy header
+$is_https = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') || 
+             (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https');
+
+$protocol = $is_https ? 'https' : 'http';
 $base_url = $protocol . "://" . $_SERVER['HTTP_HOST'] . $base_dir;
 define('BASE_URL', $base_url);
 

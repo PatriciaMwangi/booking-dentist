@@ -7,7 +7,7 @@ $pre_start = isset($_GET['start']) ? date('Y-m-d\TH:i', strtotime($_GET['start']
 $pre_end   = isset($_GET['end']) ? date('Y-m-d\TH:i', strtotime($_GET['end'])) : '';
 $dentist_id_from_url = $_GET['dentist_id'] ?? '';
 $phone = "";
-$patient_name = ""; // Match your HTML value names
+$patient_name = ""; 
 $email = "";
 
 // 1. AJAX ENDPOINT FOR AUTO-FETCH (Keep this at the top)
@@ -239,7 +239,7 @@ if (!isset($_SESSION['dentist_id'])) {
         <div class="form-group">          
             <label for="patient_name">Full Name *</label>
             <input type="text" id="patient_name" name="patient_name" required placeholder="John Doe"
-            value="<?= htmlspecialchars($_POST['patient_name'] ?? $patient) ?>">
+            value="<?= htmlspecialchars($_POST['patient_name'] ?? $patient_name) ?>">
         </div>
 
         <div class="form-group">
