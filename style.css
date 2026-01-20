@@ -906,3 +906,58 @@ body {
     cursor: pointer;
     color: #7f8c8d;
 }
+.time-container {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 10px;
+}
+
+.time-container .form-group {
+    flex: 1;
+    position: relative;
+}
+
+.time-container label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.duration-info {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 10px;
+    margin-left: 5px;
+}
+
+.duration-info.patient {
+    background: #fdebd0;
+    color: #e67e22;
+}
+
+.duration-info.dentist {
+    background: #d6eaf8;
+    color: #3498db;
+}
+
+#time-hint {
+    position: absolute;
+    bottom: -20px;
+    left: 0;
+    font-size: 12px;
+    color: #27ae60;
+    font-weight: 500;
+    animation: fadeInOut 3s ease;
+}
+
+@keyframes fadeInOut {
+    0%, 100% { opacity: 0; }
+    20%, 80% { opacity: 1; }
+}
+
+#end_time[readonly] {
+    background-color: #f8f9fa;
+    border-color: #d1d9e6;
+    color: #6c757d;
+    cursor: not-allowed;
+}

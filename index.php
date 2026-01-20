@@ -24,6 +24,7 @@ $path = trim(explode('?', $request_uri)[0], '/');
 
 // 4. ROUTE DEFINITIONS
 $protected_routes = [
+    'calendar-data' => 'calendar.php',
     'schedule'        => 'schedule.php',
     'services' => 'manage_services.php',
     'calendar'        => 'dentist.php',
@@ -52,6 +53,6 @@ elseif (array_key_exists($path, $public_routes)) {
 } 
 else {
     // Default Fallback
-    header("Location: " . BASE_URL . (isset($_SESSION['dentist_id']) ? "/schedule" : "/login"));
+    header("Location: " . BASE_URL . (isset($_SESSION['dentist_id']) ? "/calendar" : "/login"));
     exit();
 }

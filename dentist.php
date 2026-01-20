@@ -83,8 +83,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Store calendar globally for debugging
     window.calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: 'dayGridMonth',
-        eventDisplay: 'block',      // Makes the event look like a solid blue bar/badge
-    displayEventTime: false,    // Hides the "4:30a" text for a cleaner look
+        eventDisplay: 'block',      
+    displayEventTime: false,    
     height: 'auto',
         headerToolbar: {
             left: 'prev,next today',
@@ -92,13 +92,25 @@ document.addEventListener('DOMContentLoaded', function() {
             right: 'dayGridMonth,timeGridWeek,timeGridDay'
         },
         navLinks: false,
-        selectable: true,
+selectable: true,
+    unselectAuto: true,
+    
+    dateClick: function(info) {
+        console.log("Date space clicked: " + info.dateStr);
         
+        // If in Month view, zoom into that day
+        if (this.view.type === 'dayGridMonth') {
+            this.changeView('timeGridDay', info.dateStr);
+        } else if (this.view.type === 'timeGridDay') {
+            // Optional: Trigger your booking logic here too if you want 
+            // single-clicks to open the modal instead of just dragging.
+        }
+    },
         select: function(info) {
-            console.log("=== SELECTION EVENT ===");
-            console.log("Current view:", calendar.view.type);
-            console.log("Selection start:", info.startStr);
-            console.log("Selection end:", info.endStr);
+            // console.log("=== SELECTION EVENT ===");
+            // console.log("Current view:", calendar.view.type);
+            // console.log("Selection start:", info.startStr);
+            // console.log("Selection end:", info.endStr);
             
             const currentView = calendar.view.type;
             
@@ -134,20 +146,22 @@ document.addEventListener('DOMContentLoaded', function() {
     modal.style.display = 'flex';
     
     // Handle the "Proceed" button click
-    document.getElementById('confirmBookingBtn').onclick = function() {
-        const dentistId = "<?= htmlspecialchars($_GET['dentist_id'] ?? ($_SESSION['dentist_id'] ?? '')) ?>";
-        const url = new URL('booking-dentist/index.php', window.location.origin);
-        
-        // Use clean ISO strings
-        url.searchParams.set('start', info.startStr.slice(0, 16));
-        url.searchParams.set('end', info.endStr.slice(0, 16));
-        
-        if (dentistId) {
-            url.searchParams.set('dentist_id', dentistId);
-        }
-        
-        window.location.href = url.toString();
-    };
+document.getElementById('confirmBookingBtn').onclick = function() {
+    const baseUrl = "<?= BASE_URL ?>"; 
+
+    const url = new URL(baseUrl + '/', window.location.origin);
+    
+    url.searchParams.set('start', info.startStr.slice(0, 16));
+    url.searchParams.set('end', info.endStr.slice(0, 16));
+    
+    const dentistId = "<?= htmlspecialchars($_GET['dentist_id'] ?? ($_SESSION['dentist_id'] ?? '')) ?>";
+    if (dentistId) {
+        url.searchParams.set('dentist_id', dentistId);
+    }
+    
+    // console.log("Redirecting to:", url.toString());
+    window.location.href = url.toString();
+};
 }
 
 // Helper to close modal
@@ -156,7 +170,7 @@ document.addEventListener('DOMContentLoaded', function() {
             calendar.unselect();
         },
         
-        // Optional: Also handle simple clicks (not drag selections)
+        // :handle simple clicks (not drag selections)
         dateClick: function(info) {
             console.log("Date clicked directly:", info.dateStr);
             
@@ -165,16 +179,15 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         },
         
-        events: 'calendar.php<?= isset($_GET['dentist_id']) ? "?dentist_id=".urlencode($_GET['dentist_id']) : "" ?>'
-    });
+events: '<?= BASE_URL ?>/calendar-data<?= isset($_GET['dentist_id']) ? "?dentist_id=".urlencode($_GET['dentist_id']) : "" ?>'    });
 
     calendar.render();
-    console.log("Calendar ready! Try clicking empty spaces.");
+//     console.log("Calendar ready! Try clicking empty spaces.");
     
-    // Add debug helper
-    console.log("Type 'calendar' in console to access the calendar object");
-    console.log("Type 'calendar.changeView(\"timeGridDay\", \"2026-01-22\")' to test view switching");
-});
+//     // Add debug helper
+//     console.log("Type 'calendar' in console to access the calendar object");
+//     console.log("Type 'calendar.changeView(\"timeGridDay\", \"2026-01-22\")' to test view switching");
+ });
 
 
 function closeBookingModal() {

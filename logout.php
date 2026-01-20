@@ -1,6 +1,6 @@
 <?php
 // Start the session to gain access to it
-
+session_start();
 // Clear all session variables
 $_SESSION = array();
 

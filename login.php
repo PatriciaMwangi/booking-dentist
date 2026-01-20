@@ -1,6 +1,6 @@
 <?php
+session_start();
 require_once 'db.php';
-
 $error = "";
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
@@ -22,6 +22,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     } else {
         $error = "Invalid username or password.";
     }
+}
+if (!empty($_POST['website_verification_code'])) {
+    die("Bot detected."); 
 }
 ?>
 <!DOCTYPE html>
@@ -54,6 +57,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <?php endif; ?>
 
     <form method="POST">
+<div style="display:none;">
+    <input type="text" name="website_verification_code" value="">
         <div class="input-group">
             <input type="text" name="username" placeholder="Username" required>
         </div>
