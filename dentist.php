@@ -84,34 +84,31 @@ document.addEventListener('DOMContentLoaded', function() {
     window.calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: 'dayGridMonth',
         eventDisplay: 'block',      
-    displayEventTime: false,    
-    height: 'auto',
+        displayEventTime: false,    
+        height: 'auto',
         headerToolbar: {
             left: 'prev,next today',
             center: 'title',
             right: 'dayGridMonth,timeGridWeek,timeGridDay'
         },
         navLinks: false,
-selectable: true,
-    unselectAuto: true,
-    
-    dateClick: function(info) {
-        console.log("Date space clicked: " + info.dateStr);
+        selectable: true,
+        unselectAuto: true,
         
-        // If in Month view, zoom into that day
-        if (this.view.type === 'dayGridMonth') {
-            this.changeView('timeGridDay', info.dateStr);
-        } else if (this.view.type === 'timeGridDay') {
-            // Optional: Trigger your booking logic here too if you want 
-            // single-clicks to open the modal instead of just dragging.
-        }
-    },
-        select: function(info) {
-            // console.log("=== SELECTION EVENT ===");
-            // console.log("Current view:", calendar.view.type);
-            // console.log("Selection start:", info.startStr);
-            // console.log("Selection end:", info.endStr);
+        dateClick: function(info) {
+            const dateStr = info.dateStr;
+            console.log("Date clicked:", dateStr);
             
+            // Show duty status in sidebar
+            loadDutyStatus(dateStr);
+            
+            // If in month view, switch to day view
+            if (calendar.view.type === 'dayGridMonth') {
+                calendar.changeView('timeGridDay', dateStr);
+            }
+        },
+        
+        select: function(info) {
             const currentView = calendar.view.type;
             
             // Month or Week view: Go to 24-hour grid
@@ -119,81 +116,212 @@ selectable: true,
                 const targetDate = info.startStr.split('T')[0];
                 console.log(`Navigating to 24-hour grid for: ${targetDate}`);
                 
+                // Load duty status for the selected date
+                loadDutyStatus(targetDate);
+                
                 try {
                     calendar.changeView('timeGridDay', targetDate);
                 } catch (error) {
                     console.error("Failed to change view:", error);
-                    // Fallback: alert user
-                    alert(`Opening schedule for ${targetDate}`);
                 }
             }
             
             // Day view: Book appointment
-         else if (currentView === 'timeGridDay') {
-    const start = new Date(info.startStr);
-    const end = new Date(info.endStr);
-    
-    // Format times for display
-    const startTimeString = start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const endTimeString = end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    
-    // Populate Modal text
-    document.getElementById('modalStartTime').innerText = startTimeString;
-    document.getElementById('modalEndTime').innerText = endTimeString;
-    
-    // Show the modal
-    const modal = document.getElementById('bookingModal');
-    modal.style.display = 'flex';
-    
-    // Handle the "Proceed" button click
-document.getElementById('confirmBookingBtn').onclick = function() {
-    const baseUrl = "<?= BASE_URL ?>"; 
-
-    const url = new URL(baseUrl + '/', window.location.origin);
-    
-    url.searchParams.set('start', info.startStr.slice(0, 16));
-    url.searchParams.set('end', info.endStr.slice(0, 16));
-    
-    const dentistId = "<?= htmlspecialchars($_GET['dentist_id'] ?? ($_SESSION['dentist_id'] ?? '')) ?>";
-    if (dentistId) {
-        url.searchParams.set('dentist_id', dentistId);
-    }
-    
-    // console.log("Redirecting to:", url.toString());
-    window.location.href = url.toString();
-};
-}
-
-// Helper to close modal
- 
+            else if (currentView === 'timeGridDay') {
+                const start = new Date(info.startStr);
+                const end = new Date(info.endStr);
+                
+                // Format times for display
+                const startTimeString = start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const endTimeString = end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                
+                // Populate Modal text
+                const modalStartEl = document.getElementById('modalStartTime');
+                const modalEndEl = document.getElementById('modalEndTime');
+                if (modalStartEl) modalStartEl.innerText = startTimeString;
+                if (modalEndEl) modalEndEl.innerText = endTimeString;
+                
+                // Show the modal
+                const modal = document.getElementById('bookingModal');
+                if (modal) {
+                    modal.style.display = 'flex';
+                }
+                
+                // Handle the "Proceed" button click
+                const confirmBtn = document.getElementById('confirmBookingBtn');
+                if (confirmBtn) {
+                    confirmBtn.onclick = function() {
+                        const baseUrl = "<?= BASE_URL ?>"; 
+                        const url = new URL(baseUrl + '/', window.location.origin);
+                        
+                        url.searchParams.set('start', info.startStr.slice(0, 16));
+                        url.searchParams.set('end', info.endStr.slice(0, 16));
+                        
+                        const dentistId = "<?= htmlspecialchars($_GET['dentist_id'] ?? ($_SESSION['dentist_id'] ?? '')) ?>";
+                        if (dentistId) {
+                            url.searchParams.set('dentist_id', dentistId);
+                        }
+                        
+                        window.location.href = url.toString();
+                    };
+                }
+            }
+            
             // Always clear selection
             calendar.unselect();
         },
         
-        // :handle simple clicks (not drag selections)
-        dateClick: function(info) {
-            console.log("Date clicked directly:", info.dateStr);
-            
-            if (calendar.view.type === 'dayGridMonth') {
-                calendar.changeView('timeGridDay', info.dateStr);
-            }
-        },
-        
-events: '<?= BASE_URL ?>/calendar-data<?= isset($_GET['dentist_id']) ? "?dentist_id=".urlencode($_GET['dentist_id']) : "" ?>'    });
+        events: '<?= BASE_URL ?>/calendar-data<?= isset($_GET['dentist_id']) ? "?dentist_id=".urlencode($_GET['dentist_id']) : "" ?>'
+    });
 
     calendar.render();
-//     console.log("Calendar ready! Try clicking empty spaces.");
     
-//     // Add debug helper
-//     console.log("Type 'calendar' in console to access the calendar object");
-//     console.log("Type 'calendar.changeView(\"timeGridDay\", \"2026-01-22\")' to test view switching");
- });
+    console.log("Calendar ready! Click on any date to see duty status.");
+});
 
+// Function to load duty status via AJAX
+function loadDutyStatus(dateStr) {
+    console.log("Loading duty status for:", dateStr);
+    
+    // Show the container
+    const container = document.getElementById('duty-status-container');
+    const calendarContainer = document.getElementById('calendar-duty-container');
+    
+    if (container) {
+        container.style.display = 'block';
+        document.getElementById('selected-date').textContent = dateStr;
+    }
+    
+    if (calendarContainer) {
+        calendarContainer.style.display = 'block';
+    }
+    
+    // Build the URL - IMPORTANT: Use the correct endpoint
+    const url = `<?= BASE_URL ?>/get_duty_status.php?date=${dateStr}`;
+    console.log("Fetching from:", url);
+    
+    // Fetch duty data via AJAX
+    fetch(url)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            return response.json();
+        })
+        .then(data => {
+            console.log("Received data:", data);
+            updateDutyLists(data);
+        })
+        .catch(error => {
+            console.error('Error fetching duty status:', error);
+            
+            // Fallback to using calendar events
+            updateFromCalendarEvents(dateStr);
+        });
+}
 
+// Function to update duty lists from AJAX data
+function updateDutyLists(data) {
+    const onDutyList = document.getElementById('on-duty-list');
+    const offDutyList = document.getElementById('off-duty-list');
+    const onDutyCount = document.getElementById('on-duty-count');
+    const offDutyCount = document.getElementById('off-duty-count');
+    
+    if (onDutyList) {
+        if (data.onDuty && data.onDuty.length > 0) {
+            onDutyList.innerHTML = data.onDuty.map(dentist => 
+                `<div class="duty-item" style="padding: 8px 10px; margin-bottom: 5px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #27ae60; display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
+                    <span class="dentist-name" style="font-weight: 500; color: #2c3e50;">${dentist.name}</span>
+                    ${dentist.appointments ? `<span class="appointment-count" style="background: #3498db; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px;">${dentist.appointments} appt${dentist.appointments !== 1 ? 's' : ''}</span>` : ''}
+                </div>`
+            ).join('');
+        } else {
+            onDutyList.innerHTML = '<div class="no-duty" style="text-align: center; padding: 10px; color: #95a5a6; font-style: italic;">No dentists on duty</div>';
+        }
+    }
+    
+    if (offDutyList) {
+        if (data.offDuty && data.offDuty.length > 0) {
+            offDutyList.innerHTML = data.offDuty.map(dentist => 
+                `<div class="duty-item" style="padding: 8px 10px; margin-bottom: 5px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #e74c3c; display: flex; justify-content: space-between; align-items: center; font-size: 13px; opacity: 0.7;">
+                    <span class="dentist-name" style="font-weight: 500; color: #2c3e50;">${dentist.name}</span>
+                </div>`
+            ).join('');
+        } else {
+            offDutyList.innerHTML = '<div class="no-duty" style="text-align: center; padding: 10px; color: #95a5a6; font-style: italic;">All dentists are on duty</div>';
+        }
+    }
+    
+    // Update counts
+    if (onDutyCount) onDutyCount.textContent = data.onDuty ? data.onDuty.length : 0;
+    if (offDutyCount) offDutyCount.textContent = data.offDuty ? data.offDuty.length : 0;
+}
+
+// Fallback function to extract duty from calendar events
+function updateFromCalendarEvents(dateStr) {
+    if (!window.calendar) return;
+    
+    const events = window.calendar.getEvents().filter(e => e.startStr.startsWith(dateStr));
+    const onDutyNames = [...new Set(events.map(e => e.title.split(':')[0].trim()))];
+    
+    const onDutyList = document.getElementById('on-duty-list');
+    const offDutyList = document.getElementById('off-duty-list');
+    const onDutyCount = document.getElementById('on-duty-count');
+    const offDutyCount = document.getElementById('off-duty-count');
+    
+    const searchInput = document.getElementById('duty-search');
+    
+    if (searchInput) {
+        searchInput.addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            const items = document.querySelectorAll('.duty-item');
+
+            items.forEach(item => {
+                const name = item.querySelector('.dentist-name').textContent.toLowerCase();
+                if (name.includes(searchTerm)) {
+                    item.style.display = 'block';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        });
+    }
+}
+
+// Update your updateDutyLists function to ensure the "duty-item" class is used
+function updateDutyLists(data) {
+    const onDutyList = document.getElementById('on-duty-list');
+    const offDutyList = document.getElementById('off-duty-list');
+    
+    if (onDutyList) {
+        onDutyList.innerHTML = data.onDuty.length > 0 ? data.onDuty.map(d => `
+            <div class="duty-item" style="padding: 8px 10px; margin-bottom: 5px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #27ae60;">
+                <span class="dentist-name" style="font-weight: 500;">${d.name}</span>
+            </div>`).join('') : '<div class="no-duty">No one on duty</div>';
+    }
+
+    if (offDutyList) {
+        offDutyList.innerHTML = data.offDuty.length > 0 ? data.offDuty.map(d => `
+            <div class="duty-item" style="padding: 8px 10px; margin-bottom: 5px; background: #fff5f5; border-radius: 4px; border-left: 3px solid #e74c3c;">
+                <span class="dentist-name" style="font-weight: 500;">${d.name}</span>
+            </div>`).join('') : '<div class="no-duty">Everyone is on duty</div>';
+    }
+    
+    // Reset search on new date click
+    document.getElementById('duty-search').value = '';
+}
+
+// Function to close booking modal
 function closeBookingModal() {
-    document.getElementById('bookingModal').style.display = 'none';
-    calendar.unselect();
-}    
+    const modal = document.getElementById('bookingModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    if (window.calendar) {
+        window.calendar.unselect();
+    }
+}
 </script>
 <div id="bookingModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
     <div class="modal-content" style="background: white; padding: 25px; border-radius: 12px; max-width: 400px; width: 90%; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">

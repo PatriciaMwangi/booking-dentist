@@ -31,6 +31,44 @@ $total_services = $service_count_query->fetchColumn();
             <?php endif; ?>
         </a>
     <?php endif; ?>
+    <!-- In your sidebar HTML, replace the calendar section with this: -->
+<div class="sidebar-filter-container" id="calendar-duty-container">
+    <!-- This will be shown/hidden by JavaScript -->
+    <div id="duty-status-container" style="display: none; margin-bottom: 20px; padding: 15px; background: #fff; border-radius: 8px; border-left: 4px solid #3498db; box-shadow: 0 2px 10px rgba(0,0,0,0.08);">
+        <h4 id="duty-date-title" style="margin-top:0; color: #2c3e50; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; font-size: 16px;">
+            <i class="fas fa-calendar-alt" style="margin-right: 8px;"></i>
+            <span id="selected-date">Select a date</span>
+        </h4>
+        
+        <div style="margin-bottom: 20px;">
+            <h5 style="color: #27ae60; margin-bottom: 8px; font-size: 14px; display: flex; align-items: center;">
+                <i class="fas fa-user-md" style="margin-right: 8px;"></i>
+                On Duty <span id="on-duty-count" style="margin-left: auto; background: #27ae60; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px;">0</span>
+            </h5>
+            <div id="on-duty-list" style="max-height: 200px; overflow-y: auto; padding-right: 5px;">
+                <div style="text-align: center; padding: 10px; color: #95a5a6; font-style: italic;">
+                    Click a date on the calendar
+                </div>
+            </div>
+        </div>
+        
+        <div style="margin-bottom: 15px;">
+            <input type="text" id="duty-search" placeholder="🔍 Search dentist..." 
+                   style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+        </div>
+        <div>
+            <h5 style="color: #e74c3c; margin-bottom: 8px; font-size: 14px; display: flex; align-items: center;">
+                <i class="fas fa-user-clock" style="margin-right: 8px;"></i>
+                Off Duty <span id="off-duty-count" style="margin-left: auto; background: #e74c3c; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px;">0</span>
+            </h5>
+            <div id="off-duty-list" style="max-height: 200px; overflow-y: auto; padding-right: 5px; font-size: 13px;">
+                <div style="text-align: center; padding: 10px; color: #95a5a6; font-style: italic;">
+                    No date selected
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 <?php if ($current_page == 'schedule' || $current_page == 'view_dentists'): ?>
     <div class="sidebar-filter-container">
         <form method="GET" action="<?= $current_page ?>">

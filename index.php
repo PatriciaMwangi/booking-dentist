@@ -38,6 +38,7 @@ $public_routes = [
     'logout' => 'logout.php',
     ''      => 'book_appointment.php',
     'fetch-patient' => 'ajax_fetch_patient.php', // Add this route
+    'get_duty_status' => 'get_duty_status.php'
 ];
 
 // 5. ROUTING LOGIC
