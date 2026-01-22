@@ -39,7 +39,10 @@ $total_services = $service_count_query->fetchColumn();
             <i class="fas fa-calendar-alt" style="margin-right: 8px;"></i>
             <span id="selected-date">Select a date</span>
         </h4>
-        
+                <div style="margin-bottom: 15px;">
+            <input type="text" id="duty-search" placeholder="🔍 Search dentist..." 
+                   style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+        </div>
         <div style="margin-bottom: 20px;">
             <h5 style="color: #27ae60; margin-bottom: 8px; font-size: 14px; display: flex; align-items: center;">
                 <i class="fas fa-user-md" style="margin-right: 8px;"></i>
@@ -51,11 +54,7 @@ $total_services = $service_count_query->fetchColumn();
                 </div>
             </div>
         </div>
-        
-        <div style="margin-bottom: 15px;">
-            <input type="text" id="duty-search" placeholder="🔍 Search dentist..." 
-                   style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
-        </div>
+    
         <div>
             <h5 style="color: #e74c3c; margin-bottom: 8px; font-size: 14px; display: flex; align-items: center;">
                 <i class="fas fa-user-clock" style="margin-right: 8px;"></i>

@@ -1,6 +1,5 @@
 <?php
 require_once 'db.php';
-session_start();
 
 header('Content-Type: application/json');
 $events = []; 
@@ -8,6 +7,11 @@ $events = [];
 $target_dentist = $_GET['dentist_id'] ?? null;
 $is_super = (isset($_SESSION['role']) && $_SESSION['role'] === 'superintendent');
 $session_dentist = $_SESSION['dentist_id'] ?? null;
+
+// Check if session is already started
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 // Temporary debug line - check your browser console/network tab
 // ... after your variable definitions

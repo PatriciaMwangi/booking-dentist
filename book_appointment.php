@@ -14,6 +14,7 @@ $pre_start = '';
 $pre_end = '';
 $service = 'General Checkup';
 $notes = '';
+$target_dentist_id = $_GET['dentist_id'] ?? '';
 
 if (!empty($_POST['website_verification_code'])) {
     die("Bot detected."); // Silently stop the request
@@ -23,29 +24,33 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 // Clean date data from GET parameters
 if (isset($_GET['start'])) {
-    $start_str = $_GET['start'];
-    // Remove timezone offset if present
-    $start_str = preg_replace('/[+-]\d{2}:\d{2}$/', '', $start_str);
+    // Sanitize and remove timezone offsets
+    $start_str = preg_replace('/[+-]\d{2}:\d{2}$/', '', $_GET['start']);
     
-try {
-    $start_dt = new DateTime($start_str);
-    $pre_start = $start_dt->format('Y-m-d\TH:i');
-    
-    // 1. If 'end' is explicitly provided in the URL, use it
-    if (isset($_GET['end'])) {
-        $end_str = preg_replace('/[+-]\d{2}:\d{2}$/', '', $_GET['end']);
-        $end_dt = new DateTime($end_str);
-        $pre_end = $end_dt->format('Y-m-d\TH:i');
-    } 
-    // 2. Otherwise, default to 1 hour after start (works for both patients and dentists)
-    else {
-        $end_dt = clone $start_dt;
-        $end_dt->modify('+1 hour');
-        $pre_end = $end_dt->format('Y-m-d\TH:i');
-    }
-} catch (Exception $e) {
-        $message = "Invalid date format: " . $e->getMessage();
-        $message_type = "error";
+    try {
+        $start_dt = new DateTime($start_str);
+        $pre_start = $start_dt->format('Y-m-d\TH:i');
+        
+        $user_role = $_SESSION['role'] ?? 'patient';
+
+        // 1. Priority: Use the 'end' param from the calendar selection
+        if (isset($_GET['end']) && !empty($_GET['end'])) {
+            $end_str = preg_replace('/[+-]\d{2}:\d{2}$/', '', $_GET['end']);
+            $end_dt = new DateTime($end_str);
+            $pre_end = $end_dt->format('Y-m-d\TH:i');
+        } 
+        // 2. Fallback: If patient, default to 1 hour
+        else if ($user_role === 'patient') {
+            $end_dt = clone $start_dt;
+            $end_dt->modify('+1 hour');
+            $pre_end = $end_dt->format('Y-m-d\TH:i');
+        } 
+        // 3. Fallback: Dentist/Admin manual entry (start = end)
+        else {
+            $pre_end = $pre_start;
+        }
+    } catch (Exception $e) {
+        error_log("Date parsing error: " . $e->getMessage());
     }
 }
 
@@ -633,28 +638,28 @@ statusMsg.innerText = "Found: " + data.patient_name + "\n(ID Fields are now non-
 // Check if user is a dentist using a JS variable passed from PHP
 const isDentist = <?= isset($_SESSION['dentist_id']) ? 'true' : 'false' ?>;
 
-function applySuggestion(newTime, dentistId) {
-    // 1. Update the time inputs
-    const startInput = document.getElementById('start_time');
-    const endInput = document.getElementById('end_time');
+// function applySuggestion(newTime, dentistId) {
+//     // 1. Update the time inputs
+//     const startInput = document.getElementById('start_time');
+//     const endInput = document.getElementById('end_time');
     
-    startInput.value = newTime;
+//     startInput.value = newTime;
     
-    // Calculate end time (1 hour later)
-    const startDate = new Date(newTime);
-    const endDate = new Date(startDate.getTime() + (60 * 60 * 1000));
-    const formattedEnd = endDate.toISOString().slice(0, 16);
-    endInput.value = formattedEnd;
+//     // Calculate end time (1 hour later)
+//     const startDate = new Date(newTime);
+//     const endDate = new Date(startDate.getTime() + (60 * 100 * 1000));
+//     const formattedEnd = endDate.toISOString().slice(0, 16);
+//     endInput.value = formattedEnd;
 
-    // 2. Ensure the correct dentist ID is sent
-    let dentistHidden = document.querySelector('input[name="forced_dentist_id"]');
-    if (dentistHidden) {
-        dentistHidden.value = dentistId;
-    }
+//     // 2. Ensure the correct dentist ID is sent
+//     let dentistHidden = document.querySelector('input[name="forced_dentist_id"]');
+//     if (dentistHidden) {
+//         dentistHidden.value = dentistId;
+//     }
 
-    // 3. Submit the form automatically
-    document.querySelector('form').submit();
-}
+//     // 3. Submit the form automatically
+//     document.querySelector('form').submit();
+// }
 class AppointmentTimeManager {
     constructor() {
         this.startInput = document.getElementById('start_time');
@@ -685,23 +690,20 @@ init() {
     }
     
 autoCalculateEndTime() {
+    // Only run this if the user is a patient
+    const userRole = "<?= $_SESSION['role'] ?? '' ?>";
+    if (userRole !== 'patient') return; 
+
     const startVal = this.startInput.value;
     if (startVal) {
         const startDate = new Date(startVal);
-        
-        // Check if the date is valid before proceeding
         if (!isNaN(startDate.getTime())) {
-            // Add exactly 60 minutes
+            // Add 60 minutes
             const endDate = new Date(startDate.getTime() + (60 * 60 * 1000));
+            this.endInput.value = this.formatDateTimeLocal(endDate); //
             
-            this.endInput.value = this.formatDateTimeLocal(endDate);
-            
-            // Explicitly trigger the 'input' and 'change' events 
-            // so other validation logic knows the value changed
-            this.endInput.dispatchEvent(new Event('input'));
-            this.endInput.dispatchEvent(new Event('change'));
-            
-            this.showTimeHint("End time updated to 1 hour after start");
+            this.endInput.dispatchEvent(new Event('change')); //
+            this.showTimeHint("End time updated to 1 hour after start"); //
         }
     }
 }
