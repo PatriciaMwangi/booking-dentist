@@ -73,10 +73,10 @@ if (!empty($_POST['website_verification_code'])) {
     </div>
 
     <div class="input-group">
-        <input type="text" name="username" placeholder="Username" required>
+        <input type="text" name="username" placeholder="Username" value ="admin" required>
     </div>
     <div class="input-group">
-        <input type="password" name="password" placeholder="Password" required>
+        <input type="password" name="password" placeholder="Password" value ="admin123" required>
     </div>
     <button type="submit">Sign In</button>
 </form>
