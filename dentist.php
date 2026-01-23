@@ -295,7 +295,7 @@ function loadDutyStatus(dateStr) {
     }
     
     // Build the URL - IMPORTANT: Use the correct endpoint
-    const url = `<?= BASE_URL ?>/get_duty_status.php?date=${dateStr}`;
+    const url = `<?= BASE_URL ?>/get_duty_status?date=${dateStr}`;
     console.log("Fetching from:", url);
     
     // Fetch duty data via AJAX

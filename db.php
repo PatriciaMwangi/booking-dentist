@@ -1,5 +1,4 @@
 <?php
-// db.php
 require_once 'env_loader.php';
 
 if (file_exists(__DIR__ . '/.env')) {

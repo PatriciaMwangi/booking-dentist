@@ -1,4 +1,8 @@
 <?php
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 require_once 'db.php';
 
 header('Content-Type: application/json');
@@ -8,13 +12,6 @@ $target_dentist = $_GET['dentist_id'] ?? null;
 $is_super = (isset($_SESSION['role']) && $_SESSION['role'] === 'superintendent');
 $session_dentist = $_SESSION['dentist_id'] ?? null;
 
-// Check if session is already started
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-// Temporary debug line - check your browser console/network tab
-// ... after your variable definitions
 if (isset($_GET['debug'])) {
     echo json_encode([
         'debug_info' => [
