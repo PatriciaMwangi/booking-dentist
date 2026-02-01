@@ -27,6 +27,9 @@ if ($dentist && password_verify($pass, $dentist['password'])) {
     $_SESSION['dentist_name'] = $dentist['dentist_name'];
     $_SESSION['role'] = $dentist['role']; // This must be 'dentist' or 'superintendent'
 
+    require_once 'logger.php';
+    logLogin($dentist['dentist_id'], $dentist['dentist_name']);
+
     // Use your BASE_URL constant for the redirect
     header("Location: " . BASE_URL . "/dentist.php"); 
     exit();

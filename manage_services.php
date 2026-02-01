@@ -11,6 +11,7 @@ if (!defined('APP_RUNNING')) {
     http_response_code(403);
     die('<h1>403 Forbidden</h1>Direct access to this script is strictly prohibited.');
 }
+
 // 1. Initial Check for Linked Dentists (Generates the Javascript Popup)
 if (isset($_GET['delete_id']) && !isset($_GET['confirm_delete'])) {
     $id = $_GET['delete_id'];
@@ -34,18 +35,38 @@ if (isset($_GET['delete_id']) && !isset($_GET['confirm_delete'])) {
             $names = implode(', ', $dentists);
             echo "
             <script>
-                if (confirm('Warning: There are $count dentist(s) ($names) capable of performing this service. Do you still want to proceed? If yes, the service will be removed and these dentists will be disassociated from it.')) {
-                    window.location.href = 'manage_services.php?delete_id=$id&confirm_delete=1';
-                } else {
-                    window.location.href = 'manage_services.php';
-                }
-            </script>";
+        if (confirm('Warning: There are $count dentist(s) ($names) capable of performing this service. Do you still want to proceed? If yes, the service will be removed and these dentists will be disassociated from it.')) {
+            window.location.href = '" . BASE_URL . "/services?delete_id=$id&confirm_delete=1';
+        } else {
+            window.location.href = '" . BASE_URL . "/services';
+        }
+    </script>";
             exit;
         } else {
             // No dentists linked, jump to Step 2
-            header("Location: manage_services.php?delete_id=$id&confirm_delete=1");
+    header("Location: " . BASE_URL . "/services?delete_id=$id&confirm_delete=1");
             exit;
         }
+    }
+}
+
+// Handle Adding Service
+if (isset($_POST['add_service']) && !empty($_POST['new_service'])) {
+    $new_service = trim($_POST['new_service']);
+    $stmt = $pdo->prepare("INSERT IGNORE INTO available_services (service_name) VALUES (?)");
+    
+    if($stmt->execute([$new_service])) {
+        $_SESSION['msg'] = "Service added successfully!";
+        $_SESSION['msg_type'] = "success";
+        
+        // Log the service addition
+        if (isset($_SESSION['dentist_id'])) {
+            require_once 'logger.php';
+            logService($_SESSION['dentist_id'], 'Added', $new_service);
+        }
+    } else {
+        $_SESSION['msg'] = "Failed to add service.";
+        $_SESSION['msg_type'] = "error";
     }
 }
 
@@ -62,6 +83,12 @@ if (isset($_GET['delete_id']) && isset($_GET['confirm_delete'])) {
         if ($service) {
             $service_name = $service['service_name'];
 
+            // Log the service deletion BEFORE actually deleting
+            if (isset($_SESSION['dentist_id'])) {
+                require_once 'logger.php';
+                logService($_SESSION['dentist_id'], 'Deleted', $service_name);
+            }
+
             // A: Disassociate dentists in specializations table
             $stmt = $pdo->prepare("DELETE FROM specializations WHERE service_name = ?");
             $stmt->execute([$service_name]);
@@ -73,21 +100,20 @@ if (isset($_GET['delete_id']) && isset($_GET['confirm_delete'])) {
 
         $pdo->commit();
         $_SESSION['msg'] = "Service removed and dentists disassociated.";
-    $_SESSION['msg_type'] = "error"; // Using error color for deletion
-        header("Location: manage_services.php");
+        $_SESSION['msg_type'] = "error"; // Using error color for deletion
+        
+        header("Location: " . BASE_URL . "/services");
         exit;
     } catch (Exception $e) {
         $pdo->rollBack();
+        
+        // Log the deletion failure
+        if (isset($_SESSION['dentist_id']) && isset($service_name)) {
+            require_once 'logger.php';
+            logService($_SESSION['dentist_id'], 'Failed to Delete', $service_name . " - Error: " . $e->getMessage());
+        }
+        
         die("Error during deletion: " . $e->getMessage());
-    }
-}
-
-// Handle Adding
-if (isset($_POST['add_service']) && !empty($_POST['new_service'])) {
-    $stmt = $pdo->prepare("INSERT IGNORE INTO available_services (service_name) VALUES (?)");
-    if($stmt->execute([$_POST['new_service']])) {
-        $_SESSION['msg'] = "Service added successfully!";
-        $_SESSION['msg_type'] = "success";
     }
 }
 

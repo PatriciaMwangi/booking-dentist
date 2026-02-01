@@ -22,6 +22,43 @@ if (!empty($_POST['website_verification_code'])) {
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+// AUTO-FILL PATIENT DATA FROM patient_id IN URL (BEFORE ANY POST PROCESSING)
+if (isset($_GET['patient_id']) && !empty($_GET['patient_id']) && empty($_POST)) {
+    try {
+        $patient_id = (int)$_GET['patient_id'];
+        $stmt = $pdo->prepare("SELECT patient_name, email, phone FROM patients WHERE patient_id = ?");
+        $stmt->execute([$patient_id]);
+        $patient_data = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($patient_data) {
+            // Pre-fill form variables
+            $patient_name = $patient_data['patient_name'];
+            $email = $patient_data['email'];
+            $phone = $patient_data['phone'];
+            
+            // You can also optionally pre-fill the service if the patient has a history
+            // For example, get their most common service:
+            /*
+            $stmt_service = $pdo->prepare("
+                SELECT service, COUNT(*) as count 
+                FROM appointments 
+                WHERE patient_id = ? 
+                GROUP BY service 
+                ORDER BY count DESC 
+                LIMIT 1
+            ");
+            $stmt_service->execute([$patient_id]);
+            $common_service = $stmt_service->fetch(PDO::FETCH_ASSOC);
+            if ($common_service) {
+                $service = $common_service['service'];
+            }
+            */
+        }
+    } catch (PDOException $e) {
+        // Silently fail - don't show error if patient not found
+        error_log("Error fetching patient data: " . $e->getMessage());
+    }
+}
 // Clean date data from GET parameters
 if (isset($_GET['start'])) {
     // Sanitize and remove timezone offsets
@@ -53,6 +90,8 @@ if (isset($_GET['start'])) {
         error_log("Date parsing error: " . $e->getMessage());
     }
 }
+
+
 
 // 1. AJAX ENDPOINT FOR AUTO-FETCH (Keep this at the top)
 if (isset($_GET['fetch_phone'])) {
@@ -99,115 +138,169 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             throw new Exception("Start and end times are required.");
         }
         
-        $start = new DateTime($start_input);
-        $end   = new DateTime($end_input);
+       $start = new DateTime($start_input);
+$end   = new DateTime($end_input);
 
-        $is_staff = (isset($_SESSION['role']) && ($_SESSION['role'] === 'dentist' || $_SESSION['role'] === 'superintendent'));
-        
-        if (!$is_staff) {
-            // Force end time to be exactly 1 hour after start for patients
-            $end = clone $start;
-            $end->modify('+1 hour');
-        }
+$is_staff = (isset($_SESSION['role']) && ($_SESSION['role'] === 'dentist' || $_SESSION['role'] === 'superintendent'));
 
-        // Logic Check: End after Start?
-        if ($start >= $end) {
-            throw new Exception("Error: The end time must be after the start time.");
-        }
+// Validate BEFORE modifying
+if ($is_staff) {
+    // Staff can set custom times - validate them
+    if ($start >= $end) {
+        throw new Exception("Error: The end time must be after the start time.");
+    }
+} else {
+    // Patients always get 1-hour slots - ignore their end time input
+    $end = clone $start;
+    $end->modify('+1 hour');
+}
 
-        // Handle Dentist ID
+        // ============ HANDLE DENTIST ID WITH PRIORITY ============
         $dentist_id = null;
         
-        // If user is logged in as dentist or staff
-        if (isset($_SESSION['dentist_id'])) {
-            $dentist_id = $_SESSION['dentist_id'];
-        } 
-        // If dentist_id is passed in URL (from calendar click)
-        elseif (!empty($dentist_id_from_url)) {
-            $dentist_id = $dentist_id_from_url;
+        // SUPER PRIORITY: Superintendent manual selection (from POST)
+        if (isset($_SESSION['role']) && $_SESSION['role'] === 'superintendent') {
+            $super_selected_dentist = $_POST['forced_dentist_id'] ?? '';
+            if (!empty($super_selected_dentist)) {
+                $dentist_id = $super_selected_dentist;
+            }
         }
-        // If patient booking (auto-assign)
-        else {
-            // First, let's check if there are any dentists specializing in this service
-            $sql_check_service = "SELECT COUNT(*) as count FROM specializations WHERE service_name = ?";
+        
+        // If no superintendent selection, then use normal priority:
+        if (!$dentist_id) {
+            // PRIORITY 1: Check if dentist_id is in POST (hidden field from form)
+            $posted_dentist_id = $_POST['forced_dentist_id'] ?? '';
+            if (!empty($posted_dentist_id)) {
+                $dentist_id = $posted_dentist_id;
+            }
+            // PRIORITY 2: Check if dentist_id is in URL (GET parameter)
+            elseif (!empty($dentist_id_from_url)) {
+                $dentist_id = $dentist_id_from_url;
+            }
+            // PRIORITY 3: Check if user is logged in as dentist or staff
+            elseif (isset($_SESSION['dentist_id'])) {
+                $dentist_id = $_SESSION['dentist_id'];
+            }
+            // PRIORITY 4: Patient booking (auto-assign) - only if no specific dentist selected
+            else {
+                // First, let's check if there are any dentists specializing in this service
+                $sql_check_service = "SELECT COUNT(*) as count FROM specializations WHERE service_name = ?";
+                $stmt_check = $pdo->prepare($sql_check_service);
+                $stmt_check->execute([$service]);
+                $service_count = $stmt_check->fetch(PDO::FETCH_ASSOC)['count'];
+                
+                if ($service_count == 0) {
+                    throw new Exception("No dentists available for '$service' service. Please select a different service.");
+                }
+                
+                // Find available dentist for this time slot
+                $sql_find_dentist = "
+                    SELECT d.dentist_id, COUNT(a.id) as appointment_count
+                    FROM dentists d
+                    INNER JOIN specializations s ON d.dentist_id = s.dentist_id
+                    LEFT JOIN appointments a ON d.dentist_id = a.dentist_id 
+                        AND a.status != 'Cancelled'
+                        AND a.start_time < :end_time 
+                        AND a.end_time > :start_time
+                    WHERE s.service_name = :service
+                    GROUP BY d.dentist_id
+                    HAVING COUNT(a.id) = 0
+                    ORDER BY appointment_count ASC
+                    LIMIT 1";
+                
+                $stmt_find = $pdo->prepare($sql_find_dentist);
+                $stmt_find->execute([
+                    ':service' => $service,
+                    ':start_time' => $start->format('Y-m-d H:i:s'),
+                    ':end_time' => $end->format('Y-m-d H:i:s')
+                ]);
+                
+                $available_dentist = $stmt_find->fetch(PDO::FETCH_ASSOC);
+                
+                if ($available_dentist) {
+                    $dentist_id = $available_dentist['dentist_id'];
+                } else {
+                    // No dentist available at this time, find next available slot
+                    $sql_next_available = "
+                        SELECT d.dentist_id, MIN(a.end_time) as next_available
+                        FROM dentists d
+                        INNER JOIN specializations s ON d.dentist_id = s.dentist_id
+                        INNER JOIN appointments a ON d.dentist_id = a.dentist_id
+                        WHERE s.service_name = :service
+                        AND a.status != 'Cancelled'
+                        AND a.end_time > :start_time
+                        AND NOT EXISTS (
+                            SELECT 1 FROM appointments a2 
+                            WHERE a2.dentist_id = d.dentist_id
+                            AND a2.status != 'Cancelled'
+                            AND a2.start_time < DATE_ADD(a.end_time, INTERVAL 1 HOUR)
+                            AND a2.end_time > a.end_time
+                        )
+                        GROUP BY d.dentist_id
+                        ORDER BY next_available ASC
+                        LIMIT 1";
+                    
+                    $stmt_next = $pdo->prepare($sql_next_available);
+                    $stmt_next->execute([
+                        ':service' => $service,
+                        ':start_time' => $start->format('Y-m-d H:i:s')
+                    ]);
+                    
+                    $next_slot = $stmt_next->fetch(PDO::FETCH_ASSOC);
+                    
+                    if ($next_slot) {
+                        $suggested_time = new DateTime($next_slot['next_available']);
+                        $formatted_time = $suggested_time->format('F j, g:i a');
+                        
+                        // Store suggestion for user
+                        $_SESSION['suggestion'] = [
+                            'dentist_id' => $next_slot['dentist_id'],
+                            'suggested_time' => $suggested_time->format('Y-m-d H:i:s'),
+                            'service' => $service
+                        ];
+                        
+                        throw new Exception("No dentists available at your selected time. The next available slot is on $formatted_time. Would you like to book that instead?");
+                    } else {
+                        throw new Exception("No availability found for this service. Please try a different time or service.");
+                    }
+                }
+            }
+        }
+        
+        // ============ VALIDATE DENTIST-SERVICE MATCH ============
+        if ($dentist_id && !empty($service)) {
+            // Check if this dentist provides the selected service
+            $sql_check_service = "SELECT COUNT(*) as count FROM specializations 
+                                  WHERE dentist_id = ? AND service_name = ?";
             $stmt_check = $pdo->prepare($sql_check_service);
-            $stmt_check->execute([$service]);
+            $stmt_check->execute([$dentist_id, $service]);
             $service_count = $stmt_check->fetch(PDO::FETCH_ASSOC)['count'];
             
             if ($service_count == 0) {
-                throw new Exception("No dentists available for this service. Please select a different service.");
+                // Get dentist name for error message
+                $stmt_dentist = $pdo->prepare("SELECT dentist_name FROM dentists WHERE dentist_id = ?");
+                $stmt_dentist->execute([$dentist_id]);
+                $dentist_info = $stmt_dentist->fetch(PDO::FETCH_ASSOC);
+                $dentist_name = $dentist_info['dentist_name'] ?? 'This dentist';
+                
+                throw new Exception("$dentist_name does not provide '$service' service. Please select a different service.");
             }
             
-            // Find available dentist for this time slot
-            $sql_find_dentist = "
-                SELECT d.dentist_id, COUNT(a.id) as appointment_count
-                FROM dentists d
-                INNER JOIN specializations s ON d.dentist_id = s.dentist_id
-                LEFT JOIN appointments a ON d.dentist_id = a.dentist_id 
-                    AND a.status != 'Cancelled'
-                    AND a.start_time < :end_time 
-                    AND a.end_time > :start_time
-                WHERE s.service_name = :service
-                GROUP BY d.dentist_id
-                HAVING COUNT(a.id) = 0
-                ORDER BY appointment_count ASC
-                LIMIT 1";
-            
-            $stmt_find = $pdo->prepare($sql_find_dentist);
-            $stmt_find->execute([
-                ':service' => $service,
+            // FIXED: Check if dentist is available at the requested time - using all named parameters
+            $sql_check_availability = "SELECT COUNT(*) FROM appointments 
+                                       WHERE dentist_id = :dentist_id 
+                                       AND status != 'Cancelled'
+                                       AND start_time < :end_time 
+                                       AND end_time > :start_time";
+            $stmt_avail = $pdo->prepare($sql_check_availability);
+            $stmt_avail->execute([
+                ':dentist_id' => $dentist_id,
                 ':start_time' => $start->format('Y-m-d H:i:s'),
                 ':end_time' => $end->format('Y-m-d H:i:s')
             ]);
             
-            $available_dentist = $stmt_find->fetch(PDO::FETCH_ASSOC);
-            
-            if ($available_dentist) {
-                $dentist_id = $available_dentist['dentist_id'];
-            } else {
-                // No dentist available at this time, find next available slot
-                $sql_next_available = "
-                    SELECT d.dentist_id, MIN(a.end_time) as next_available
-                    FROM dentists d
-                    INNER JOIN specializations s ON d.dentist_id = s.dentist_id
-                    INNER JOIN appointments a ON d.dentist_id = a.dentist_id
-                    WHERE s.service_name = :service
-                    AND a.status != 'Cancelled'
-                    AND a.end_time > :start_time
-                    AND NOT EXISTS (
-                        SELECT 1 FROM appointments a2 
-                        WHERE a2.dentist_id = d.dentist_id
-                        AND a2.status != 'Cancelled'
-                        AND a2.start_time < DATE_ADD(a.end_time, INTERVAL 1 HOUR)
-                        AND a2.end_time > a.end_time
-                    )
-                    GROUP BY d.dentist_id
-                    ORDER BY next_available ASC
-                    LIMIT 1";
-                
-                $stmt_next = $pdo->prepare($sql_next_available);
-                $stmt_next->execute([
-                    ':service' => $service,
-                    ':start_time' => $start->format('Y-m-d H:i:s')
-                ]);
-                
-                $next_slot = $stmt_next->fetch(PDO::FETCH_ASSOC);
-                
-                if ($next_slot) {
-                    $suggested_time = new DateTime($next_slot['next_available']);
-                    $formatted_time = $suggested_time->format('F j, g:i a');
-                    
-                    // Store suggestion for user
-                    $_SESSION['suggestion'] = [
-                        'dentist_id' => $next_slot['dentist_id'],
-                        'suggested_time' => $suggested_time->format('Y-m-d H:i:s'),
-                        'service' => $service
-                    ];
-                    
-                    throw new Exception("No dentists available at your selected time. The next available slot is on $formatted_time. Would you like to book that instead?");
-                } else {
-                    throw new Exception("No availability found for this service. Please try a different time or service.");
-                }
+            if ($stmt_avail->fetchColumn() > 0) {
+                throw new Exception("The selected dentist is not available at this time. Please choose another time.");
             }
         }
         
@@ -222,9 +315,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                       AND (start_time < :end AND end_time > :start)";
         $stmt_check = $pdo->prepare($sql_check);
         $stmt_check->execute([
-            'd_id'  => $dentist_id,
-            'start' => $start->format('Y-m-d H:i:s'),
-            'end'   => $end->format('Y-m-d H:i:s')
+            ':d_id'  => $dentist_id,
+            ':start' => $start->format('Y-m-d H:i:s'),
+            ':end'   => $end->format('Y-m-d H:i:s')
         ]);
 
         if ($stmt_check->fetchColumn() > 0) {
@@ -249,19 +342,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         // Insert Appointment
         $sql = "INSERT INTO appointments (patient_id, dentist_id, service, start_time, end_time, notes, status) 
-                VALUES (:p_id, :d_id, :service, :start, :end, :notes, 'Pending')";
+                VALUES (?, ?, ?, ?, ?, ?, 'Pending')";
         
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([
-            ':p_id'    => $patient_id,
-            ':d_id'    => $dentist_id,
-            ':service' => $service,
-            ':start'   => $start->format('Y-m-d H:i:s'),
-            ':end'     => $end->format('Y-m-d H:i:s'),
-            ':notes'   => $notes
-        ]);
+$stmt->execute([
+    $patient_id,
+    $dentist_id,
+    $service,
+    $start->format('Y-m-d H:i:s'),
+    $end->format('Y-m-d H:i:s'),
+    $notes
+]);
 
         $appointment_id = $pdo->lastInsertId();
+        require_once 'logger.php';
+        logAppointment($dentist_id, 'Created', $appointment_id, $name);
         
         // Handle redirection based on user type
         if (isset($_SESSION['role']) && ($_SESSION['role'] === 'dentist' || $_SESSION['role'] === 'superintendent')) {
@@ -289,7 +384,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         
         // Preserve form values on error
         $pre_start = $_POST['start_time'] ?? $pre_start;
-        $pre_end = $_POST['end_time'] ?? $pre_end;
+        // $pre_end = $_POST['end_time'] ?? $pre_end;
+
+         if (!$is_staff && !empty($_POST['start_time'])) {
+            try {
+                $start_temp = new DateTime($_POST['start_time']);
+                $end_temp = clone $start_temp;
+                $end_temp->modify('+1 hour');
+                $pre_end = $end_temp->format('Y-m-d\TH:i');
+            } catch (Exception $e2) {
+                $pre_end = '';
+            }
+        } else {
+            $pre_end = $_POST['end_time'] ?? $pre_end;
+        }
     }
 }
 ?>
@@ -317,16 +425,33 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <body>
 
 <div class="form-container">
-    <?php if (!isset($_SESSION['dentist_id'])): ?>
-        <div style="text-align: right; margin-bottom: 10px;">
-            <a href="login.php" style="text-decoration: none; font-size: 14px; color: #3498db; border: 1px solid #3498db; padding: 5px 10px; border-radius: 4px;">
-                Dentist Login
-            </a>
-        </div>
-    <?php endif; ?>
+  <?php if (!isset($_SESSION['dentist_id'])): ?>
+    <div style="text-align: right; margin-bottom: 10px;">
+        <a href="login.php" style="text-decoration: none; font-size: 14px; color: #3498db; border: 1px solid #3498db; padding: 5px 10px; border-radius: 4px;">
+            Dentist Login
+        </a>
+    </div>
+<?php else: ?>
+    <div style="text-align: right; margin-bottom: 10px;">
+        <a href="dentist.php" style="text-decoration: none; font-size: 14px; color: #3498db; border: 1px solid #3498db; padding: 5px 10px; border-radius: 4px;">
+            My Schedule
+        </a>
+    </div>
+<?php endif; ?>
 
     <h2>Book Your Dental Visit</h2>
-
+    <?php if (isset($_GET['patient_id']) && !empty($patient_name)): ?>
+<div class="existing-patient-notice" style="background: #e8f4fc; border-left: 4px solid #3498db; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+    <div style="display: flex; align-items: center; gap: 10px;">
+        <div style="font-size: 20px;">👤</div>
+        <div>
+            <strong>Booking for existing patient:</strong> <?= htmlspecialchars($patient_name) ?>
+            <br>
+            <small style="color: #666;">Patient information has been auto-filled.</small>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
     <?php if ($message): ?>
         <div class="alert <?php echo $message_type; ?>">
@@ -354,10 +479,83 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <?php else: ?>
 
     <form action="" method="POST">
-        <input type="hidden" name="forced_dentist_id" value="<?= htmlspecialchars($dentist_id_from_url) ?>">
+            <input type="hidden" name="patient_id" value="<?= $_GET['patient_id'] ?? '' ?>">
+        <input type="hidden" name="forced_dentist_id" id="forced_dentist_id_field" value="<?= htmlspecialchars($dentist_id_from_url) ?>">
 <div style="display:none;">
     <input type="text" name="website_verification_code" value="">
 </div>
+
+<?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'superintendent'): ?>
+<div class="form-group" id="super-dentist-search" style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; border-left: 4px solid #3498db; margin-bottom: 20px;">
+    <label style="font-weight: bold; color: #2c3e50; margin-bottom: 10px; display: block;">
+        🔍 Superintendent: Assign to Dentist
+    </label>
+    
+    <?php
+    // Fetch all dentists for the search
+    $all_dentists = [];
+    try {
+        $sql_dentists = "SELECT dentist_id, dentist_name FROM dentists ORDER BY dentist_name ASC";
+        $stmt_dentists = $pdo->query($sql_dentists);
+        $all_dentists = $stmt_dentists->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log("Error fetching dentists: " . $e->getMessage());
+    }
+    ?>
+    
+    <div style="margin-bottom: 10px;">
+        <div style="position: relative;">
+            <input type="text" 
+                   id="super_dentist_search" 
+                   placeholder="Type dentist name to search..." 
+                   autocomplete="off"
+                   style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; padding-right: 40px;"
+                   onkeyup="filterDentists()"
+                   value="<?= !empty($dentist_id_from_url) ? getDentistNameById($dentist_id_from_url, $all_dentists) : '' ?>">
+            <div style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: #999;">
+                🔍
+            </div>
+        </div>
+        <div id="search_results" style="display: none; max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; background: white; margin-top: 5px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+            <!-- Search results will appear here -->
+        </div>
+    </div>
+    
+    <div id="super_dentist_info" style="margin-top: 10px; padding: 10px; background: white; border-radius: 4px; border: 1px solid #eee; <?= empty($dentist_id_from_url) ? 'display: none;' : '' ?>">
+        <div id="super_selected_dentist_text">
+            <?php if (!empty($dentist_id_from_url)): ?>
+                <?php 
+                $dentist_name = getDentistNameById($dentist_id_from_url, $all_dentists);
+                if ($dentist_name): ?>
+                    <strong>Selected Dentist:</strong> Dr. <?= htmlspecialchars($dentist_name) ?><br>
+                    <small style="color: #27ae60;">✓ This appointment will be assigned to Dr. <?= htmlspecialchars($dentist_name) ?></small>
+                <?php endif; ?>
+            <?php endif; ?>
+        </div>
+    </div>
+<!--     
+    <div style="display: flex; gap: 10px; margin-top: 10px;">
+        <button type="button" onclick="clearSuperDentist()" class="btn-clear" 
+                style="padding: 8px 12px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer;">
+            Clear Assignment
+        </button>
+        <button type="button" onclick="setAutoAssign()" class="btn-auto" 
+                style="padding: 8px 12px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer;">
+            Auto-Assign
+        </button>
+    </div> -->
+    
+    <small style="color: #7f8c8d; display: block; margin-top: 8px;">
+        ⓘ As a superintendent, you can manually assign this appointment to any dentist. Type the dentist's name above.
+    </small>
+</div>
+
+<!-- Store dentist data for JavaScript -->
+<script>
+const allDentistsData = <?= json_encode($all_dentists) ?>;
+</script>
+<?php endif; ?>
+
 <div class="form-group">
     <label for="phone">Phone Number *</label>
     <input type="tel" id="phone" name="phone" required placeholder="(254) 712-345-678" autocomplete="off"value="<?= htmlspecialchars($_POST['phone'] ?? $phone) ?>">
@@ -386,26 +584,72 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         <option value="" disabled selected>Select a service...</option>
         <?php
         try {
-            // We fetch only services that actually have an assigned dentist
-            $sql_services = "SELECT DISTINCT service_name FROM specializations ORDER BY service_name ASC";
-            $stmt_services = $pdo->query($sql_services);
+            // Determine which dentist to use for service filtering
+            $filter_dentist_id = null;
             
+            // PRIORITY 1: Dentist ID from URL (when patient browses dentist's page)
+            if (!empty($dentist_id_from_url)) {
+                $filter_dentist_id = $dentist_id_from_url;
+            }
+            // PRIORITY 2: Dentist ID from session (when dentist is logged in)
+            elseif (isset($_SESSION['dentist_id'])) {
+                $filter_dentist_id = $_SESSION['dentist_id'];
+            }
+            
+            // Build the SQL query based on whether we have a specific dentist
+            if ($filter_dentist_id) {
+                // Fetch only services that THIS SPECIFIC DENTIST provides
+                $sql_services = "SELECT DISTINCT s.service_name 
+                                 FROM specializations s
+                                 WHERE s.dentist_id = ?
+                                 ORDER BY s.service_name ASC";
+                $stmt_services = $pdo->prepare($sql_services);
+                $stmt_services->execute([$filter_dentist_id]);
+                
+                // Also get dentist name for context
+                $stmt_dentist = $pdo->prepare("SELECT dentist_name FROM dentists WHERE dentist_id = ?");
+                $stmt_dentist->execute([$filter_dentist_id]);
+                $dentist_info = $stmt_dentist->fetch(PDO::FETCH_ASSOC);
+                $dentist_name = $dentist_info['dentist_name'] ?? 'the selected dentist';
+            } else {
+                // No specific dentist - show all services available at the clinic
+                $sql_services = "SELECT DISTINCT service_name FROM specializations ORDER BY service_name ASC";
+                $stmt_services = $pdo->query($sql_services);
+                $dentist_name = "our clinic";
+            }
+            
+            $services_found = false;
             while ($row = $stmt_services->fetch(PDO::FETCH_ASSOC)): 
                 $s_name = htmlspecialchars($row['service_name']);
                 // Maintain selection if the page reloads due to a validation error
                 $is_selected = (isset($_POST['service']) && $_POST['service'] === $s_name) ? 'selected' : '';
+                $services_found = true;
         ?>
             <option value="<?= $s_name ?>" <?= $is_selected ?>><?= $s_name ?></option>
         <?php 
             endwhile; 
+            
+            // If no services found for the specific dentist
+            if (!$services_found && $filter_dentist_id) {
+                echo '<option value="" disabled>No services available for ' . htmlspecialchars($dentist_name) . '</option>';
+            } elseif (!$services_found) {
+                echo '<option value="" disabled>No services currently available</option>';
+            }
         } catch (PDOException $e) {
+            error_log("Service dropdown error: " . $e->getMessage());
             echo '<option value="" disabled>Error loading services</option>';
         }
         ?>
     </select>
     
-    <?php if (!isset($_SESSION['dentist_id'])): ?>
-        <small style="color: #7f8c8d;">* We will automatically assign a specialist based on your selection.</small>
+    <?php if ($filter_dentist_id): ?>
+        <small style="color: #3498db; font-weight: 500;">
+            ⓘ Showing services provided by <?= htmlspecialchars($dentist_name) ?>
+        </small>
+    <?php elseif (!isset($_SESSION['dentist_id'])): ?>
+        <small style="color: #7f8c8d;">
+            * We will automatically assign a specialist based on your selection.
+        </small>
     <?php endif; ?>
 </div>
 
@@ -449,7 +693,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     </form>
     <?php endif; ?>
 </div>
+
 <script>
+
+// Your existing JavaScript code continues below...
 
 document.getElementById('phone').addEventListener('blur', function() {
     const phone = this.value.trim();
@@ -558,7 +805,7 @@ statusMsg.innerText = "Found: " + data.patient_name + "\n(ID Fields are now non-
             statusMsg.innerText = "Trying alternative method...";
             
             const xhr = new XMLHttpRequest();
-            const xhrUrl = '/booking-dentist/ajax_fetch_patient.php?fetch_phone=' + encodeURIComponent(cleanPhone);
+            const xhrUrl = '/booking-dentist/ajax_fetch_patient?fetch_phone=' + encodeURIComponent(cleanPhone);
             
             xhr.open('GET', xhrUrl, true);
             xhr.setRequestHeader('Accept', 'application/json');
@@ -612,54 +859,11 @@ statusMsg.innerText = "Found: " + data.patient_name + "\n(ID Fields are now non-
         document.getElementById('email').value = '';
     }
 });
-// document.querySelector('form').addEventListener('submit', function(e) {
-//     const startVal = document.querySelector('input[name="start_time"]').value;
-//     console.log(startVal)
-//     const endVal = document.querySelector('input[name="end_time"]').value;
-//     const errorDiv = document.getElementById('time-error-message');
 
-//     if (startVal && endVal) {
-//         const start = new Date(startVal);
-//         const end = new Date(endVal);
-
-//         if (start >= end) {
-//             e.preventDefault(); // STOPS THE PAGE REFRESH
-//             errorDiv.style.display = 'block';
-//             errorDiv.innerText = "⚠️ Error: The end time must be after the start time.";
-            
-//             // Scroll to error so the user sees it
-//             errorDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
-//             return false;
-//         }
-//     }
-//     console.log('startVal',startVal)
-//     errorDiv.style.display = 'none'; // Hide if valid
-// });
 // Check if user is a dentist using a JS variable passed from PHP
 const isDentist = <?= isset($_SESSION['dentist_id']) ? 'true' : 'false' ?>;
 
-// function applySuggestion(newTime, dentistId) {
-//     // 1. Update the time inputs
-//     const startInput = document.getElementById('start_time');
-//     const endInput = document.getElementById('end_time');
-    
-//     startInput.value = newTime;
-    
-//     // Calculate end time (1 hour later)
-//     const startDate = new Date(newTime);
-//     const endDate = new Date(startDate.getTime() + (60 * 100 * 1000));
-//     const formattedEnd = endDate.toISOString().slice(0, 16);
-//     endInput.value = formattedEnd;
 
-//     // 2. Ensure the correct dentist ID is sent
-//     let dentistHidden = document.querySelector('input[name="forced_dentist_id"]');
-//     if (dentistHidden) {
-//         dentistHidden.value = dentistId;
-//     }
-
-//     // 3. Submit the form automatically
-//     document.querySelector('form').submit();
-// }
 class AppointmentTimeManager {
     constructor() {
         this.startInput = document.getElementById('start_time');
@@ -771,6 +975,10 @@ autoCalculateEndTime() {
 // Initialize when page loads
 document.addEventListener('DOMContentLoaded', () => {
     new AppointmentTimeManager();
+      console.log('DOM loaded');
+    console.log('allDentistsData:', typeof allDentistsData !== 'undefined' ? allDentistsData : 'NOT DEFINED');
+    console.log('Is superintendent:', <?= json_encode(isset($_SESSION['role']) && $_SESSION['role'] === 'superintendent') ?>);
+    
     
     // Add visual indication for dentists
     if (isDentist) {
@@ -797,6 +1005,251 @@ document.addEventListener('DOMContentLoaded', () => {
         endInput.style.cursor = 'not-allowed';
     }
 });
+// Superintendent dentist search functionality
+
+
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded - initializing dentist search');
+    
+    <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'superintendent'): ?>
+    const forcedDentistField = document.getElementById('forced_dentist_id_field');
+    const dentistInfoDiv = document.getElementById('super_dentist_info');
+    const searchInput = document.getElementById('super_dentist_search');
+    const searchResults = document.getElementById('search_results');
+    // const clearBtn = document.getElementById('clearSuperBtn');
+    // const autoBtn = document.getElementById('autoAssignBtn');
+    
+    console.log('Elements found:', {
+        forcedDentistField: !!forcedDentistField,
+        dentistInfoDiv: !!dentistInfoDiv,
+        searchInput: !!searchInput,
+        searchResults: !!searchResults,
+        // clearBtn: !!clearBtn,
+        // autoBtn: !!autoBtn
+    });
+    
+    // Initialize with current value
+    updateSuperDentistDisplay();
+    
+    // Add event listeners
+    if (searchInput) {
+        searchInput.addEventListener('keyup', filterDentists);
+        searchInput.addEventListener('focus', function() {
+            if (this.value.trim() === '') {
+                filterDentists();
+            }
+        });
+    }
+    
+    // if (clearBtn) {
+    //     clearBtn.addEventListener('click', clearSuperDentist);
+    // }
+    
+    // if (autoBtn) {
+    //     autoBtn.addEventListener('click', setAutoAssign);
+    // }
+    
+    // Click outside to close search results
+    document.addEventListener('click', function(e) {
+        if (searchResults && !searchResults.contains(e.target) && searchInput && !searchInput.contains(e.target)) {
+            searchResults.style.display = 'none';
+        }
+    });
+    <?php endif; ?>
+    
+    // Initialize other form functionality
+    initFormValidation();
+});
+
+function filterDentists() {
+    const searchInput = document.getElementById('super_dentist_search');
+    const searchResults = document.getElementById('search_results');
+    const searchTerm = searchInput.value.toLowerCase().trim();
+    
+    if (!searchResults) return;
+    
+    if (searchTerm === '') {
+        searchResults.style.display = 'none';
+        return;
+    }
+    
+    // Filter dentists based on search term
+    const filteredDentists = allDentistsData.filter(dentist => 
+        dentist.dentist_name.toLowerCase().includes(searchTerm) ||
+        dentist.dentist_name.toLowerCase().replace('dr. ', '').includes(searchTerm)
+    );
+    
+    if (filteredDentists.length > 0) {
+        let html = '';
+        filteredDentists.forEach(dentist => {
+            // Highlight matching part
+            const name = dentist.dentist_name;
+            const lowerName = name.toLowerCase();
+            const index = lowerName.indexOf(searchTerm);
+            let highlightedName = name;
+            
+            if (index !== -1) {
+                const before = name.substring(0, index);
+                const match = name.substring(index, index + searchTerm.length);
+                const after = name.substring(index + searchTerm.length);
+                highlightedName = `${before}<strong>${match}</strong>${after}`;
+            }
+            
+            html += `
+                <div class="search-result-item" 
+                     onclick="selectDentistFromSearch('${dentist.dentist_id}', '${dentist.dentist_name.replace("'", "\\'")}')"
+                     style="padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; transition: background 0.2s;"
+                     onmouseover="this.style.backgroundColor='#f0f8ff'" 
+                     onmouseout="this.style.backgroundColor='white'">
+                    <div style="font-weight: 500;">Dr. ${highlightedName}</div>
+                    <small style="color: #666;">Click to select</small>
+                </div>
+            `;
+        });
+        
+        searchResults.innerHTML = html;
+        searchResults.style.display = 'block';
+    } else {
+        searchResults.innerHTML = `
+            <div style="padding: 15px; text-align: center; color: #666;">
+                No dentists found matching "${searchTerm}"
+            </div>
+        `;
+        searchResults.style.display = 'block';
+    }
+}
+
+function selectDentistFromSearch(dentistId, dentistName) {
+    console.log('Selecting dentist:', dentistId, dentistName);
+    const searchInput = document.getElementById('super_dentist_search');
+    const searchResults = document.getElementById('search_results');
+    const forcedDentistField = document.getElementById('forced_dentist_id_field');
+    
+    // Set the search input value
+    if (searchInput) searchInput.value = dentistName;
+    
+    // Set the hidden field value
+    if (forcedDentistField) forcedDentistField.value = dentistId;
+    
+    // Hide search results
+    if (searchResults) searchResults.style.display = 'none';
+    
+    // Update display
+    updateSuperDentistDisplay();
+    
+    // Reload the page to update services dropdown
+    const url = new URL(window.location);
+    url.searchParams.set('dentist_id', dentistId);
+    console.log('Redirecting to:', url.toString());
+    window.location.href = url.toString();
+}
+
+function updateSuperDentistDisplay() {
+    const dentistInfoDiv = document.getElementById('super_dentist_info');
+    const selectedDentistText = document.getElementById('super_selected_dentist_text');
+    const forcedDentistField = document.getElementById('forced_dentist_id_field');
+    
+    if (forcedDentistField && forcedDentistField.value && allDentistsData) {
+        // Find dentist name from the data
+        const dentist = allDentistsData.find(d => d.dentist_id == forcedDentistField.value);
+        if (dentist) {
+            selectedDentistText.innerHTML = `
+                <strong>Selected Dentist:</strong> Dr. ${dentist.dentist_name}<br>
+                <small style="color: #27ae60;">✓ This appointment will be assigned to Dr. ${dentist.dentist_name}</small>
+            `;
+            dentistInfoDiv.style.display = 'block';
+        }
+    } else {
+        if (dentistInfoDiv) dentistInfoDiv.style.display = 'none';
+    }
+}
+
+function clearSuperDentist() {
+    console.log('Clearing dentist assignment');
+    const forcedDentistField = document.getElementById('forced_dentist_id_field');
+    const searchInput = document.getElementById('super_dentist_search');
+    const searchResults = document.getElementById('search_results');
+    const dentistInfoDiv = document.getElementById('super_dentist_info');
+    
+    if (forcedDentistField) forcedDentistField.value = '';
+    if (searchInput) searchInput.value = '';
+    if (searchResults) searchResults.style.display = 'none';
+    if (dentistInfoDiv) dentistInfoDiv.style.display = 'none';
+    
+    // Remove dentist_id from URL
+    const url = new URL(window.location);
+    url.searchParams.delete('dentist_id');
+    console.log('Redirecting to:', url.toString());
+    window.location.href = url.toString();
+}
+
+function setAutoAssign() {
+    console.log('Setting auto-assign');
+    const forcedDentistField = document.getElementById('forced_dentist_id_field');
+    const searchInput = document.getElementById('super_dentist_search');
+    const searchResults = document.getElementById('search_results');
+    
+    if (forcedDentistField) forcedDentistField.value = '';
+    if (searchInput) searchInput.value = '';
+    if (searchResults) searchResults.style.display = 'none';
+    
+    // Remove dentist_id from URL
+    const url = new URL(window.location);
+    url.searchParams.delete('dentist_id');
+    console.log('Redirecting to:', url.toString());
+    window.location.href = url.toString();
+}
+
+function initFormValidation() {
+    console.log('Initializing form validation');
+    // Your existing form validation code here
+}
+
+// Add CSS for better search results styling
+const style = document.createElement('style');
+style.textContent = `
+    .search-result-item:hover {
+        background-color: #f0f8ff !important;
+    }
+    
+    #search_results::-webkit-scrollbar {
+        width: 8px;
+    }
+    
+    #search_results::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+    
+    #search_results::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 4px;
+    }
+    
+    #search_results::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+`;
+document.head.appendChild(style);
+
+// Helper function to get dentist name by ID
+function getDentistNameById(dentistId, dentists) {
+    if (!dentists || !dentistId) return '';
+    const dentist = dentists.find(d => d.dentist_id == dentistId);
+    return dentist ? dentist.dentist_name : '';
+}
 </script>
+<?php
+// Helper function to get dentist name by ID
+function getDentistNameById($dentist_id, $dentists) {
+    if (!$dentist_id || !$dentists) return '';
+    foreach ($dentists as $dentist) {
+        if ($dentist['dentist_id'] == $dentist_id) {
+            return $dentist['dentist_name'];
+        }
+    }
+    return '';
+}
+?>
 </body>
 </html>

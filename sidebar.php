@@ -2,15 +2,81 @@
 // 1. Fetch the total count of available services for the badge
 $service_count_query = $pdo->query("SELECT COUNT(*) FROM available_services");
 $total_services = $service_count_query->fetchColumn();
+// Function to get profile picture (similar to your profile.php)
+function getSidebarProfilePicture($user_id, $role) {
+    $profile_dir = 'uploads/profiles/';
+    
+    // Check if directory exists
+    if (!is_dir($profile_dir)) {
+        // Return default avatar
+        return "data:image/svg+xml;base64," . base64_encode('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="#4a90e2"/><text x="20" y="24" text-anchor="middle" fill="white" font-size="16">👨‍⚕️</text></svg>');
+    }
+    
+    $extensions = ['jpg', 'jpeg', 'png', 'gif'];
+    foreach ($extensions as $ext) {
+        $filename = $role . '_' . $user_id . '.' . $ext;
+        if (file_exists($profile_dir . $filename)) {
+            return $profile_dir . $filename . '?t=' . filemtime($profile_dir . $filename);
+        }
+    }
+    
+    // Default avatar
+    return "data:image/svg+xml;base64," . base64_encode('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="#4a90e2"/><text x="20" y="24" text-anchor="middle" fill="white" font-size="16">👨‍⚕️</text></svg>');
+}
+
+// Get user info for sidebar
+$user_id = $_SESSION['dentist_id'] ?? null;
+$role = $_SESSION['role'] ?? null;
+$user_name = $_SESSION['dentist_name'] ?? 'User';
+
+// Get total services count for badge (if needed)
+$service_count = 0;
+if (isset($pdo)) {
+    try {
+        $service_count_query = $pdo->query("SELECT COUNT(*) FROM available_services");
+        $service_count = $service_count_query->fetchColumn();
+    } catch (Exception $e) {
+        $service_count = 0;
+    }
+}
 ?>
 
-<div class="sidebar">
-    <div class="sidebar-header">Clinic Menu</div>
-    
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Your head content -->
+</head>
+<body style="display: flex;">
+    <div class="sidebar-container">
+        <!-- Profile Header -->
+        <div class="sidebar-profile-header">
+            <a href="<?= BASE_URL ?>/profile" class="profile-link">
+                <div class="profile-avatar-small">
+                    <img src="<?= getSidebarProfilePicture($user_id, $role) ?>" 
+                         alt="Profile Picture" 
+                         class="profile-pic-small">
+                </div>
+                <div class="profile-info">
+                    <div class="profile-name"><?= htmlspecialchars($user_name) ?></div>
+                    <div class="profile-role"><?= htmlspecialchars(ucfirst($role)) ?></div>
+                </div>
+            </a>
+        </div>
+        
+        <!-- Clinic Menu Header -->
+        <div class="sidebar-header">Clinic Menu</div>
+        
+
+<nav class="sidebar-nav">    
     <a href="<?= BASE_URL ?>/calendar" class="sidebar-item <?= ($current_page == 'calendar') ? 'active' : '' ?>">
         📅 My Calendar
     </a>
-
+        <a href="<?= BASE_URL ?>/" class="sidebar-item <?= ($current_page == '') ? 'active' : '' ?>">
+        ➕  Appointment
+    </a>
+        <a href="<?= BASE_URL ?>/profile" class="sidebar-item">
+        👤 My Profile
+    </a>
     <a href="<?= BASE_URL ?>/dentists" class="sidebar-item <?= ($current_page == 'view_dentists') ? 'active' : '' ?>">
         👩‍⚕️ View All Dentists
     </a>
@@ -18,6 +84,7 @@ $total_services = $service_count_query->fetchColumn();
     <a href="<?= BASE_URL ?>/schedule" class="sidebar-item <?= ($current_page == 'schedule') ? 'active' : '' ?>">
         📋 View All Schedule
     </a>
+
     
     <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'superintendent'): ?>
         <a href="<?= BASE_URL ?>/new-dentist" class="sidebar-item <?= ($current_page == 'register_dentists') ? 'active' : '' ?>">
@@ -30,10 +97,29 @@ $total_services = $service_count_query->fetchColumn();
                 <span class="sidebar-badge"><?= $total_services ?></span>
             <?php endif; ?>
         </a>
+                <a href="<?= BASE_URL ?>/patients" class="sidebar-item <?= ($current_page == 'patients') ? 'active' : '' ?>">
+            👥 All Patients
+        </a>
+               <?php
+        // Count recent logs (last 24 hours) for badge
+        $recent_logs_count = 0;
+        if (isset($pdo)) {
+            try {
+                $stmt = $pdo->query("SELECT COUNT(*) FROM activity_logs WHERE created_at >= NOW() - INTERVAL 1 DAY");
+                $recent_logs_count = $stmt->fetchColumn();
+            } catch (Exception $e) {
+                error_log("Error counting logs: " . $e->getMessage());
+            }
+        }
+        ?>
+        <a href="<?= BASE_URL ?>/logs" class="sidebar-item <?= ($current_page == 'manage_logs') ? 'active' : '' ?>" style="display: flex; justify-content: space-between; align-items: center;">
+            <span>📊 Activity Logs</span>
+            <?php if ($recent_logs_count > 0): ?>
+                <span class="sidebar-badge" style="background: #e74c3c;"><?= $recent_logs_count ?></span>
+            <?php endif; ?>
+        </a>
     <?php endif; ?>
-    <!-- In your sidebar HTML, replace the calendar section with this: -->
 <div class="sidebar-filter-container" id="calendar-duty-container">
-    <!-- This will be shown/hidden by JavaScript -->
     <div id="duty-status-container" style="display: none; margin-bottom: 20px; padding: 15px; background: #fff; border-radius: 8px; border-left: 4px solid #3498db; box-shadow: 0 2px 10px rgba(0,0,0,0.08);">
         <h4 id="duty-date-title" style="margin-top:0; color: #2c3e50; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; font-size: 16px;">
             <i class="fas fa-calendar-alt" style="margin-right: 8px;"></i>

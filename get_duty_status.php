@@ -2,21 +2,16 @@
 // get_duty_status.php
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
-
-// Start session to access roles/IDs as done in calendar.php
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
-
 header('Content-Type: application/json');
-
 $date = $_GET['date'] ?? date('Y-m-d');
 $target_dentist = $_GET['dentist_id'] ?? null;
 $is_super = (isset($_SESSION['role']) && $_SESSION['role'] === 'superintendent');
 
 try {
     require_once 'db.php';
-    
     if (!isset($pdo)) {
         throw new Exception("Database connection not available");
     }
@@ -25,7 +20,7 @@ try {
     // If NOT super, we only care about the logged-in dentist
     $filter_sql = "";
     $params = [$date];
-
+    
     if (!$is_super) {
         $id_to_use = !empty($target_dentist) ? $target_dentist : ($_SESSION['dentist_id'] ?? null);
         if ($id_to_use) {
@@ -33,9 +28,23 @@ try {
             $params[] = $id_to_use;
         }
     }
-
-
-    // Main query combining your duty logic with calendar.php's filtering
+    
+    // First, get the total appointment count for this date
+    $total_count_sql = "
+        SELECT COUNT(*) as total_appointments
+        FROM appointments a
+        JOIN dentists d ON a.dentist_id = d.dentist_id
+        WHERE DATE(a.start_time) = ?
+        AND a.status != 'Cancelled'
+        $filter_sql
+    ";
+    
+    $stmt_total = $pdo->prepare($total_count_sql);
+    $stmt_total->execute($params);
+    $total_result = $stmt_total->fetch(PDO::FETCH_ASSOC);
+    $total_appointments = $total_result['total_appointments'] ?? 0;
+    
+    // Then get individual dentist details
     $query = "
         SELECT 
             d.dentist_id,
@@ -49,14 +58,13 @@ try {
         GROUP BY d.dentist_id, d.dentist_name
         ORDER BY d.dentist_name
     ";
-
+    
     $stmt = $pdo->prepare($query);
     $stmt->execute($params);
     $dentists = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
+    
     $onDuty = [];
     $offDuty = [];
-
     foreach ($dentists as $dentist) {
         $dentistData = [
             'id' => (int)$dentist['dentist_id'],
@@ -71,7 +79,7 @@ try {
             $offDuty[] = $dentistData;
         }
     }
-
+    
     echo json_encode([
         'success' => true,
         'date' => $date,
@@ -79,6 +87,7 @@ try {
         'offDuty' => $offDuty,
         'totalOnDuty' => count($onDuty),
         'totalOffDuty' => count($offDuty),
+        'totalAppointments' => (int)$total_appointments, // Add total appointments
         'message' => 'Duty status retrieved successfully'
     ]);
 
@@ -87,7 +96,8 @@ try {
         'success' => false,
         'error' => $e->getMessage(),
         'onDuty' => [],
-        'offDuty' => []
+        'offDuty' => [],
+        'totalAppointments' => 0
     ]);
 }
 exit;

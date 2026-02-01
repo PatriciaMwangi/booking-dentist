@@ -1,4 +1,8 @@
 <?php
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 session_start();
 define('APP_RUNNING', true);
 
@@ -29,7 +33,18 @@ $protected_routes = [
     'services' => 'manage_services.php',
     'calendar'        => 'dentist.php',
     'dentists'        => 'view_dentists.php',
-    'new-dentist'     =>'register_dentists.php'
+    'new-dentist'     =>'register_dentists.php',
+    'patients'    => 'patients.php',
+    'test_patients' => 'test_patients.php',
+    'patient_history' => 'patient_history.php',
+    'logs' =>'manage_logs.php',
+    'dentist_specializations' => 'dentist_specializations.php',
+    'profile' => 'profile.php',
+    'debug-appointments' => 'debug-appointments.php',
+    'check-dentist-appointments' => 'check_dentist_appointments.php',
+    'delete_dentist' =>'delete_dentist.php',
+    'toggle_dentist_status' => 'toggle_dentist_status.php',
+    'get-dentists-for-service' => 'get_dentists_for_service.php',
 
 ];
 
@@ -37,7 +52,7 @@ $public_routes = [
     'login' => 'login.php',
     'logout' => 'logout.php',
     ''      => 'book_appointment.php',
-    'fetch-patient' => 'ajax_fetch_patient.php', // Add this route
+    'fetch-patient' => 'ajax_fetch_patient.php', 
     'get_duty_status' => 'get_duty_status.php'
 ];
 

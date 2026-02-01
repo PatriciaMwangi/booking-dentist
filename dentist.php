@@ -41,7 +41,7 @@ $services_list = ["General Checkup", "Teeth Cleaning", "Tooth Extraction", "Dent
 <div id="appointmentModal" class="modal" style="display:none; position:fixed; z-index:2000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5);">
     <div class="registration-card" style="margin: 5% auto; max-width: 500px; background:white; padding:30px; border-radius:12px;">
         <h3>Add New Appointment</h3>
-        <form action="add_appointment.php" method="POST">
+        <form action="book_appointment.php" method="POST">
             <div class="filter-group">
                 <label>Date & Time</label>
                 <input type="datetime-local" id="modal_date" name="appointment_datetime" required style="width:100%; padding:10px;">
@@ -106,6 +106,10 @@ $services_list = ["General Checkup", "Teeth Cleaning", "Tooth Extraction", "Dent
     }
 }
 
+// Global variables for appointment navigation
+let allAppointments = [];
+let currentAppointmentIndex = -1;
+
 document.addEventListener('DOMContentLoaded', function() {
     var calendarEl = document.getElementById('calendar');
     
@@ -117,8 +121,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Store calendar globally for debugging
     window.calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: 'dayGridMonth',
-        eventDisplay: 'block',      
-        displayEventTime: false,    
+        eventDisplay: 'auto',      
+        displayEventTime: true,
         height: 'auto',
         headerToolbar: {
             left: 'prev,next today',
@@ -128,19 +132,178 @@ document.addEventListener('DOMContentLoaded', function() {
         navLinks: false,
         selectable: true,
         unselectAuto: true,
-        // --- 24-HOUR GRID DETAIL SETTINGS ---
-        slotMinTime: '00:00:00',      // Start at midnight
-        slotMaxTime: '24:00:00',      // End at midnight
-        slotDuration: '00:10:00',     // Create 10-minute "slots" for booking
-        slotLabelInterval: '00:30:00', // Only show text labels every hour to keep UI clean
-        // ------------------------------------
+        
+        // --- 24-HOUR GRID SETTINGS ---
+        slotMinTime: '00:00:00',
+        slotMaxTime: '24:00:00',
+        slotDuration: '00:10:00',
+        slotLabelInterval: '01:00:00',
+        
         selectMirror: true,
         
+        // Event rendering
+        eventContent: function(arg) {
+            // Hide count events (badges are handled separately)
+            if (arg.event.extendedProps.is_count_event) {
+                return { html: '' };
+            }
+            
+            // For appointment events, show in day/week view only
+            const view = window.calendar.view.type;
+            if (view === 'dayGridMonth') {
+                return { html: '' }; // Hide in month view
+            }
+            
+            // Show in day/week view
+            return {
+                html: `<div class="fc-event-main-frame" style="padding: 2px 4px;">
+                    <div class="fc-event-time">${arg.timeText}</div>
+                    <div class="fc-event-title">${arg.event.title}</div>
+                </div>`
+            };
+        },
+        
+        // Customize day cell content (for month view badges)
+        dayCellContent: function(arg) {
+            const view = window.calendar.view.type;
+            
+            // Only show badges in month view
+            if (view !== 'dayGridMonth') {
+                return; // Use default rendering for other views
+            }
+            
+            let container = document.createElement('div');
+            container.className = 'fc-daygrid-day-frame';
+            container.style.cssText = `
+                display: flex;
+                flex-direction: column;
+                height: 100%;
+                width: 100%;
+                position: relative;
+            `;
+            
+            // Add day number
+            let dayNumber = document.createElement('div');
+            dayNumber.className = 'fc-daygrid-day-number';
+            dayNumber.innerHTML = arg.dayNumberText.replace(/th|st|nd|rd/g, '');
+            dayNumber.style.cssText = `
+                align-self: flex-start;
+                padding: 2px;
+                font-size: 12px;
+                font-weight: bold;
+            `;
+            
+            // Badge container
+            let badgeContainer = document.createElement('div');
+            badgeContainer.style.cssText = `
+                flex-grow: 1;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                position: relative;
+                margin-top: 2px;
+            `;
+            
+            // Get date in local timezone
+            const year = arg.date.getFullYear();
+            const month = String(arg.date.getMonth() + 1).padStart(2, '0');
+            const day = String(arg.date.getDate()).padStart(2, '0');
+            const dateStr = `${year}-${month}-${day}`;
+            
+            // Find count event for this date
+            const events = window.calendar.getEvents();
+            const countEvent = events.find(e => {
+                const eventStart = e.startStr ? e.startStr.split('T')[0] : '';
+                return eventStart === dateStr && e.extendedProps && e.extendedProps.is_count_event;
+            });
+            
+            if (countEvent) {
+                const count = countEvent.extendedProps.appointment_count;
+                const badgeColor = countEvent.extendedProps.badge_color || '#3498db';
+                
+                let badge = document.createElement('div');
+                badge.className = 'count-badge';
+                badge.innerText = count;
+                badge.title = `${count} appointment${count > 1 ? 's' : ''}`;
+                badge.style.cssText = `
+                    background-color: ${badgeColor};
+                    color: white;
+                    font-size: 11px;
+                    font-weight: bold;
+                    padding: 4px 8px;
+                    border-radius: 12px;
+                    min-width: 24px;
+                    text-align: center;
+                    display: inline-block;
+                    cursor: pointer;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                    transition: transform 0.2s;
+                `;
+                
+                badge.addEventListener('mouseenter', function() {
+                    this.style.transform = 'scale(1.1)';
+                });
+                badge.addEventListener('mouseleave', function() {
+                    this.style.transform = 'scale(1)';
+                });
+                
+                badgeContainer.appendChild(badge);
+            }
+            
+            container.appendChild(dayNumber);
+            container.appendChild(badgeContainer);
+            
+            return { domNodes: [container] };
+        },
+        
+        // Handle event clicks (for appointments)
+        eventClick: function(info) {
+            // Don't handle count events
+            if (info.event.extendedProps.is_count_event) {
+                return;
+            }
+            
+            // Show appointment details
+            showAppointmentDetailsModal(info.event);
+            
+            // Prevent default navigation
+            info.jsEvent.preventDefault();
+        },
+        
+        datesSet: function(arg) {
+            const activeDate = window.calendar.getDate(); 
+            const year = activeDate.getFullYear();
+            const month = String(activeDate.getMonth() + 1).padStart(2, '0');
+            const day = String(activeDate.getDate()).padStart(2, '0');
+            const dateStr = `${year}-${month}-${day}`;
+            
+            const sidebarHeading = document.querySelector('.sidebar-date-heading') || 
+                                  document.querySelector('.card-body h6');
+            if (sidebarHeading) {
+                sidebarHeading.textContent = dateStr;
+            }
+
+            if (typeof loadDutyStatus === 'function') {
+                loadDutyStatus(dateStr);
+            }
+            
+            setTimeout(() => {
+                window.calendar.render();
+            }, 100);
+        },
+        
+        eventSourceSuccess: function(content, response) {
+            console.log('Events loaded:', content.length);
+            setTimeout(() => {
+                window.calendar.render();
+            }, 50);
+            return content;
+        },
+
         selectAllow: function(selectInfo) {
             const now = new Date();
             if (selectInfo.start < now) return false;
 
-            // Dynamic Label Logic (Your existing code)
             setTimeout(() => {
                 const mirrorEl = document.querySelector('.fc-timegrid-event-harness.fc-timegrid-mirror');
                 if (mirrorEl) {
@@ -163,94 +326,60 @@ document.addEventListener('DOMContentLoaded', function() {
             const dateStr = info.dateStr;
             console.log("Date clicked:", dateStr);
             
-            // Show duty status in sidebar
-            loadDutyStatus(dateStr);
-            
-            // If in month view, switch to day view
-            if (calendar.view.type === 'dayGridMonth') {
-                calendar.changeView('timeGridDay', dateStr);
-            }
-        },
-        
-        datesSet: function(dateInfo) {
-            // 1. Get the current active date from the calendar instance
-            const activeDate = window.calendar.getDate(); 
-            
-            // 2. Format to YYYY-MM-DD manually to avoid UTC/timezone shifts
-            const year = activeDate.getFullYear();
-            const month = String(activeDate.getMonth() + 1).padStart(2, '0');
-            const day = String(activeDate.getDate()).padStart(2, '0');
-            const dateStr = `${year}-${month}-${day}`;
-            
-            console.log("Synchronizing Sidebar to Calendar Date:", dateStr);
-
-            const sidebarHeading = document.querySelector('.sidebar-date-heading') || 
-                                  document.querySelector('.card-body h6'); // Adjust selector to your sidebar's date ID
-            if (sidebarHeading) {
-                sidebarHeading.textContent = dateStr;
-            }
-
-            // 4. Trigger the AJAX fetch for the correct day
             if (typeof loadDutyStatus === 'function') {
                 loadDutyStatus(dateStr);
+            }
+            
+            if (calendar.view.type === 'dayGridMonth') {
+                calendar.changeView('timeGridDay', dateStr);
             }
         },
         
         select: function(info) {
             const currentView = calendar.view.type;
             
-            // Month or Week view: Go to 24-hour grid
             if (currentView === 'dayGridMonth' || currentView === 'timeGridWeek') {
                 const targetDate = info.startStr.split('T')[0];
                 console.log(`Navigating to 24-hour grid for: ${targetDate}`);
                 
-                // Load duty status for the selected date
-                loadDutyStatus(targetDate);
+                if (typeof loadDutyStatus === 'function') {
+                    loadDutyStatus(targetDate);
+                }
                 
                 try {
                     calendar.changeView('timeGridDay', targetDate);
                 } catch (error) {
                     console.error("Failed to change view:", error);
                 }
-            }
-            
-            // Day view: Book appointment
-            else if (currentView === 'timeGridDay') {
+            } else if (currentView === 'timeGridDay') {
                 const start = new Date(info.startStr);
                 const end = new Date(info.endStr);
                 
-                // Format times for display
                 const startTimeString = start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 const endTimeString = end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 
-                // Populate Modal text
                 const modalStartEl = document.getElementById('modalStartTime');
                 const modalEndEl = document.getElementById('modalEndTime');
                 if (modalStartEl) modalStartEl.innerText = startTimeString;
                 if (modalEndEl) modalEndEl.innerText = endTimeString;
                 
-                // Show the modal
                 const modal = document.getElementById('bookingModal');
                 if (modal) {
                     modal.style.display = 'flex';
                 }
                 
-                // Handle the "Proceed" button click
                 const confirmBtn = document.getElementById('confirmBookingBtn');
                 if (confirmBtn) {
                     confirmBtn.onclick = function() {
-                        const baseUrl = "<?= BASE_URL ?>"; 
-                        // Ensure path points to the booking script
+        const baseUrl = window.BASE_URL || '<?= BASE_URL ?>' || '';
                         const url = new URL(baseUrl + '/', window.location.origin);
                         
-                        // 1. Pass the exact calendar selection (10-min slots supported)
                         url.searchParams.set('start', info.startStr.slice(0, 16));
                         url.searchParams.set('end', info.endStr.slice(0, 16));
                         
-                        // 2. PRIORITIZE: URL dentist_id > Session dentist_id
                         const urlParams = new URLSearchParams(window.location.search);
                         const dentistIdFromUrl = urlParams.get('dentist_id');
-                        const sessionDentistId = "<?= $_SESSION['dentist_id'] ?? '' ?>";
+                        const sessionDentistId = window.sessionDentistId || '';
                         
                         const finalDentistId = dentistIdFromUrl || sessionDentistId;
                         
@@ -263,18 +392,310 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
-            // Always clear selection
             calendar.unselect();
         },
         
-        events: '<?= BASE_URL ?>/calendar-data<?= isset($_GET['dentist_id']) ? "?dentist_id=".urlencode($_GET['dentist_id']) : "" ?>'
+        events: function(info, successCallback, failureCallback) {
+                const baseUrl = window.BASE_URL || '<?= BASE_URL ?>' || '';
+            const urlParams = new URLSearchParams(window.location.search);
+            const dentistId = urlParams.get('dentist_id');
+            
+    let url = baseUrl + '/calendar-data';
+            if (dentistId) {
+                url += '?dentist_id=' + encodeURIComponent(dentistId);
+            }
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Fetched events:', data);
+                    successCallback(data);
+                })
+                .catch(error => {
+                    console.error('Error fetching events:', error);
+                    failureCallback(error);
+                });
+        }
     });
 
     calendar.render();
+    console.log("Calendar ready!");
+});
+
+// ============================================
+// APPOINTMENT MODAL WITH NAVIGATION
+// ============================================
+
+function showAppointmentDetailsModal(event) {
+    const props = event.extendedProps;
     
-    // REMOVED: updateWelcomeTitle(); // Don't call here - duty lists aren't loaded yet
+    // Get all appointment events (not count events)
+    const calendar = window.calendar;
+    if (calendar) {
+        allAppointments = calendar.getEvents().filter(e => 
+            e.extendedProps && e.extendedProps.is_appointment
+        );
+        
+        // Sort by start time
+        allAppointments.sort((a, b) => {
+            return new Date(a.start) - new Date(b.start);
+        });
+        
+        // Find current appointment index
+        currentAppointmentIndex = allAppointments.findIndex(e => 
+            e.extendedProps.appointment_id === props.appointment_id
+        );
+    }
     
-    console.log("Calendar ready! Click on any date to see duty status.");
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('appointmentDetailsModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'appointmentDetailsModal';
+        modal.className = 'modal-overlay';
+        modal.style.cssText = `
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.6);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        `;
+        document.body.appendChild(modal);
+    }
+    
+    // Render the modal content
+    renderAppointmentModal(event);
+    modal.style.display = 'flex';
+}
+
+function renderAppointmentModal(event) {
+    const modal = document.getElementById('appointmentDetailsModal');
+    if (!modal) return;
+    
+    const props = event.extendedProps;
+    
+    // Format times
+    const startTime = new Date(event.start);
+    const endTime = new Date(event.end);
+    const timeString = `${startTime.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})} - ${endTime.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`;
+    const dateString = startTime.toLocaleDateString('en-US', {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'});
+    
+    // Status badge color
+    const statusColors = {
+        'Pending': '#f39c12',
+        'Completed': '#27ae60',
+        'Cancelled': '#e74c3c'
+    };
+    const statusColor = statusColors[props.status] || '#3498db';
+    
+    // Build dentist section
+    let dentistSection = '';
+    if (props.is_superintendent) {
+        dentistSection = `
+            <div style="display: flex; align-items: center; gap: 10px; padding: 12px; background: #f8f9fa; border-radius: 8px;">
+                <span style="font-size: 24px;">👨‍⚕️</span>
+                <div style="flex: 1;">
+                    <div style="font-size: 12px; color: #7f8c8d; font-weight: 600;">DENTIST</div>
+                    <div style="font-size: 16px; color: #2c3e50; font-weight: 600;">Dr. ${props.dentist_name}</div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Navigation buttons state
+    const hasPrevious = currentAppointmentIndex > 0;
+    const hasNext = currentAppointmentIndex < allAppointments.length - 1;
+    
+    const prevButtonStyle = hasPrevious 
+        ? 'background: rgba(255,255,255,0.2); cursor: pointer; opacity: 1;' 
+        : 'background: rgba(255,255,255,0.1); cursor: not-allowed; opacity: 0.4;';
+    
+    const nextButtonStyle = hasNext 
+        ? 'background: rgba(255,255,255,0.2); cursor: pointer; opacity: 1;' 
+        : 'background: rgba(255,255,255,0.1); cursor: not-allowed; opacity: 0.4;';
+    
+    modal.innerHTML = `
+        <div style="background: white; padding: 0; border-radius: 15px; width: 90%; max-width: 500px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); overflow: hidden;">
+            <!-- Header with Navigation -->
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 25px; color: white;">
+                <div style="display: flex; justify-content: space-between; align-items: start; gap: 15px;">
+                    <!-- Previous Button -->
+                    <button 
+                        onclick="navigateToPreviousAppointment()" 
+                        ${!hasPrevious ? 'disabled' : ''}
+                        style="${prevButtonStyle} border: none; color: white; font-size: 20px; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.3s; flex-shrink: 0;"
+                        title="Previous Appointment">
+                        ‹
+                    </button>
+                    
+                    <!-- Title -->
+                    <div style="flex: 1; text-align: center;">
+                        <h3 style="margin: 0 0 5px 0; font-size: 24px;">📋 Appointment Details</h3>
+                        <div style="font-size: 14px; opacity: 0.9;">#${props.appointment_id}</div>
+                        <div style="font-size: 12px; opacity: 0.7; margin-top: 5px;">
+                            ${currentAppointmentIndex + 1} of ${allAppointments.length}
+                        </div>
+                    </div>
+                    
+                    <!-- Next Button -->
+                    <button 
+                        onclick="navigateToNextAppointment()" 
+                        ${!hasNext ? 'disabled' : ''}
+                        style="${nextButtonStyle} border: none; color: white; font-size: 20px; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.3s; flex-shrink: 0;"
+                        title="Next Appointment">
+                        ›
+                    </button>
+                    
+                    <!-- Close Button -->
+                    <button 
+                        onclick="closeAppointmentDetailsModal()" 
+                        style="background: rgba(255,255,255,0.2); border: none; color: white; font-size: 24px; cursor: pointer; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: background 0.3s; flex-shrink: 0;"
+                        title="Close">
+                        ×
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Content -->
+            <div style="padding: 25px;">
+                <!-- Date & Time -->
+                <div style="margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                        <span style="font-size: 24px;">📅</span>
+                        <div style="flex: 1;">
+                            <div style="font-size: 12px; color: #7f8c8d; font-weight: 600;">DATE & TIME</div>
+                            <div style="font-size: 16px; color: #2c3e50; font-weight: 600;">${dateString}</div>
+                            <div style="font-size: 14px; color: #7f8c8d; margin-top: 2px;">⏰ ${timeString}</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Patient -->
+                <div style="display: flex; align-items: center; gap: 10px; padding: 12px; background: #f8f9fa; border-radius: 8px; margin-bottom: 15px;">
+                    <span style="font-size: 24px;">👤</span>
+                    <div style="flex: 1;">
+                        <div style="font-size: 12px; color: #7f8c8d; font-weight: 600;">PATIENT</div>
+                        <div style="font-size: 16px; color: #2c3e50; font-weight: 600;">${props.patient_name}</div>
+                        <div style="font-size: 14px; color: #7f8c8d;">📞 ${props.phone}</div>
+                    </div>
+                </div>
+                
+                ${dentistSection}
+                
+                <!-- Service -->
+                <div style="display: flex; align-items: center; gap: 10px; padding: 12px; background: #f8f9fa; border-radius: 8px; margin-bottom: 15px; ${dentistSection ? 'margin-top: 15px;' : ''}">
+                    <span style="font-size: 24px;">🦷</span>
+                    <div style="flex: 1;">
+                        <div style="font-size: 12px; color: #7f8c8d; font-weight: 600;">SERVICE</div>
+                        <div style="font-size: 16px; color: #2c3e50; font-weight: 600;">${props.service}</div>
+                    </div>
+                </div>
+                
+                <!-- Status -->
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 24px;">📊</span>
+                    <div style="flex: 1;">
+                        <div style="font-size: 12px; color: #7f8c8d; font-weight: 600; margin-bottom: 5px;">STATUS</div>
+                        <span style="background-color: ${statusColor}20; color: ${statusColor}; padding: 6px 16px; border-radius: 20px; font-weight: 600; font-size: 14px; border: 2px solid ${statusColor}; display: inline-block;">
+                            ${props.status}
+                        </span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div style="padding: 20px 25px; background: #f8f9fa; border-top: 1px solid #e0e0e0; display: flex; gap: 10px; justify-content: space-between; align-items: center;">
+                <!-- Keyboard Hint -->
+                <div style="font-size: 12px; color: #95a5a6;">
+                    💡 Use arrow keys to navigate
+                </div>
+                
+                <!-- Action Buttons -->
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="closeAppointmentDetailsModal()" style="padding: 10px 20px; border: 1px solid #ddd; border-radius: 8px; background: white; cursor: pointer; font-weight: 600; color: #7f8c8d; transition: all 0.3s;">
+                        Close
+                    </button>
+                    <button onclick="window.location.href='schedule.php?updated_id=${props.appointment_id}'" style="padding: 10px 20px; border: none; border-radius: 8px; background: #3498db; color: white; cursor: pointer; font-weight: 600; transition: all 0.3s;">
+                        View in Schedule
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Add hover effects
+    const buttons = modal.querySelectorAll('button');
+    buttons.forEach(button => {
+        if (!button.disabled) {
+            button.addEventListener('mouseenter', function() {
+                if (this.style.background.includes('rgba(255,255,255,0.2)')) {
+                    this.style.background = 'rgba(255,255,255,0.3)';
+                }
+            });
+            button.addEventListener('mouseleave', function() {
+                if (this.style.background.includes('rgba(255,255,255,0.3)')) {
+                    this.style.background = 'rgba(255,255,255,0.2)';
+                }
+            });
+        }
+    });
+}
+
+function navigateToPreviousAppointment() {
+    if (currentAppointmentIndex > 0) {
+        currentAppointmentIndex--;
+        const prevEvent = allAppointments[currentAppointmentIndex];
+        renderAppointmentModal(prevEvent);
+    }
+}
+
+function navigateToNextAppointment() {
+    if (currentAppointmentIndex < allAppointments.length - 1) {
+        currentAppointmentIndex++;
+        const nextEvent = allAppointments[currentAppointmentIndex];
+        renderAppointmentModal(nextEvent);
+    }
+}
+
+function closeAppointmentDetailsModal() {
+    const modal = document.getElementById('appointmentDetailsModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    
+    // Reset navigation state
+    allAppointments = [];
+    currentAppointmentIndex = -1;
+}
+
+// Keyboard navigation support
+document.addEventListener('keydown', function(event) {
+    const modal = document.getElementById('appointmentDetailsModal');
+    if (modal && modal.style.display === 'flex') {
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            navigateToPreviousAppointment();
+        } else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+            event.preventDefault();
+            navigateToNextAppointment();
+        } else if (event.key === 'Escape') {
+            event.preventDefault();
+            closeAppointmentDetailsModal();
+        }
+    }
+});
+
+// Close modal when clicking outside
+document.addEventListener('click', function(event) {
+    const modal = document.getElementById('appointmentDetailsModal');
+    if (modal && event.target === modal) {
+        closeAppointmentDetailsModal();
+    }
 });
 
 // Function to load duty status via AJAX
