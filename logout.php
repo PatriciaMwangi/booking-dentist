@@ -1,13 +1,16 @@
 <?php
 // Start the session to gain access to it
-session_start();
-// Clear all session variables
-$_SESSION = array();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 if (isset($_SESSION['dentist_id'])) {
     require_once 'logger.php';
     logLogout($_SESSION['dentist_id'], $_SESSION['dentist_name'] ?? 'Unknown');
 }
+
+// Clear all session variables
+$_SESSION = array();
 
 // If it's desired to kill the session, also delete the session cookie.
 // This is more secure than just session_destroy()

@@ -1,5 +1,8 @@
 <?php
-session_start();
+// Start the session to gain access to it
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 require_once 'db.php';
 
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'superintendent') {

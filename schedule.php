@@ -15,53 +15,14 @@ if (!isset($_SESSION['dentist_id'])) {
     header("Location: login.php");
     exit();
 }
-$debug_log = '/opt/lampp/logs/reassign_debug.log';
-$debug_msg = "[" . date('Y-m-d H:i:s') . "] ";
-$debug_msg .= "REQUEST_METHOD: " . $_SERVER['REQUEST_METHOD'] . ", ";
-$debug_msg .= "SCRIPT_NAME: " . $_SERVER['SCRIPT_NAME'] . ", ";
-$debug_msg .= "REQUEST_URI: " . $_SERVER['REQUEST_URI'] . "\n";
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $debug_msg .= "POST data: " . print_r($_POST, true) . "\n";
-}
-
-file_put_contents($debug_log, $debug_msg, FILE_APPEND);
-
-
-
-// ============================================
-// CRITICAL: REASSIGNMENT HANDLER MUST BE FIRST
-// ============================================
 // ============================================
 // CRITICAL: REASSIGNMENT HANDLER MUST BE FIRST
 // ============================================
 if (isset($_POST['reassign_appointment'])) {
-        ob_start();
 
-    $log_data = date('Y-m-d H:i:s') . " - Reassignment attempt\n";
-    $log_data .= "POST data: " . print_r($_POST, true) . "\n";
-    $log_data .= "Session role: " . ($_SESSION['role'] ?? 'none') . "\n";
-    $log_data .= "Appointment ID: " . ($_POST['appointment_id'] ?? 'null') . "\n";
-    $log_data .= "Old Dentist ID: " . ($_POST['old_dentist_id'] ?? 'null') . "\n";
-    $log_data .= "New Dentist ID: " . ($_POST['new_dentist_id'] ?? 'null') . "\n\n";
-    
-    file_put_contents('/tmp/reassign_debug.log', $log_data, FILE_APPEND);
-    
-  
-    error_log("=== REASSIGNMENT DETECTED ===");
-    error_log("Full POST: " . print_r($_POST, true));
-    error_log("Session role: " . ($_SESSION['role'] ?? 'none'));
-     $output = ob_get_contents();
-    if (!empty($output)) {
-        error_log("WARNING: Output detected before header: " . $output);
-        // Log it and clean the buffer
-        file_put_contents('/tmp/stray_output.log', $output, FILE_APPEND);
-    }
-    ob_end_clean(); // Clean the buffer
-    
     // Check if superintendent
     if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'superintendent') {
-        error_log("Access denied - not superintendent");
         $_SESSION['error'] = "❌ Access denied. Only superintendents can reassign appointments.";
         header("Location: schedule.php");
         exit();
@@ -72,20 +33,14 @@ if (isset($_POST['reassign_appointment'])) {
     $old_dentist_id = $_POST['old_dentist_id'] ?? null;
     $reassign_reason = trim($_POST['reassign_reason'] ?? '');
     
-    error_log("appointment_id: $appointment_id");
-    error_log("new_dentist_id: $new_dentist_id");
-    error_log("old_dentist_id: $old_dentist_id");
-    error_log("reassign_reason: $reassign_reason");
     
     try {
         // Validate
         if (!$appointment_id || !$new_dentist_id || !$old_dentist_id) {
-            error_log("Validation failed: Missing required fields");
             throw new Exception("Missing required fields");
         }
         
         if ($new_dentist_id == $old_dentist_id) {
-            error_log("Validation failed: Same dentist");
             throw new Exception("Cannot reassign to the same dentist");
         }
         
@@ -96,15 +51,12 @@ if (isset($_POST['reassign_appointment'])) {
         $appt = $stmt->fetch(PDO::FETCH_ASSOC);
         
         if (!$appt) {
-            error_log("Appointment #$appointment_id not found in database");
             throw new Exception("Appointment not found");
         }
         
-        error_log("Current dentist_id in DB: " . $appt['dentist_id']);
-        error_log("Expected old_dentist_id: $old_dentist_id");
+
         
         if ($appt['dentist_id'] != $old_dentist_id) {
-            error_log("Dentist mismatch! DB has: {$appt['dentist_id']}, Form sent: $old_dentist_id");
             throw new Exception("Appointment has been modified. Please refresh.");
         }
         
@@ -114,12 +66,10 @@ if (isset($_POST['reassign_appointment'])) {
         $new_dentist = $stmt->fetch(PDO::FETCH_ASSOC);
         
         if (!$new_dentist) {
-            error_log("New dentist with ID $new_dentist_id not found");
             throw new Exception("Selected dentist not found");
         }
         
         if ($new_dentist['status'] !== 'Active') {
-            error_log("New dentist is not active. Status: " . $new_dentist['status']);
             throw new Exception("Selected dentist is not available");
         }
         
@@ -136,8 +86,7 @@ if (isset($_POST['reassign_appointment'])) {
                 reassign_reason = ?
             WHERE id = ?
         ");
-        error_log("Executing UPDATE: SET dentist_id=$new_dentist_id, reassigned_from=$old_dentist_id, reassign_reason='$reassign_reason' WHERE id=$appointment_id");
-        
+
         $result = $stmt->execute([
             $new_dentist_id, 
             $old_dentist_id, 
@@ -146,35 +95,27 @@ if (isset($_POST['reassign_appointment'])) {
         ]);
         
         $rows_affected = $stmt->rowCount();
-        error_log("UPDATE executed. Result: " . ($result ? 'true' : 'false'));
-        error_log("Rows affected: $rows_affected");
+
         
         if ($rows_affected > 0) {
             // Verify the update
             $verifyStmt = $pdo->prepare("SELECT dentist_id, reassigned_from FROM appointments WHERE id = ?");
             $verifyStmt->execute([$appointment_id]);
             $updatedAppt = $verifyStmt->fetch(PDO::FETCH_ASSOC);
-            
-            error_log("Verification - Current dentist_id: " . $updatedAppt['dentist_id']);
-            error_log("Verification - reassigned_from: " . $updatedAppt['reassigned_from']);
-            
+          
             $msg = "✅ Appointment #$appointment_id reassigned from Dr. {$old_dentist['dentist_name']} to Dr. {$new_dentist['dentist_name']}";
             if ($reassign_reason) {
                 $msg .= "<br><small>Reason: " . htmlspecialchars($reassign_reason) . "</small>";
             }
             $_SESSION['success'] = $msg;
-            error_log("SUCCESS: Reassignment complete. Row count: $rows_affected");
         } else {
-            error_log("WARNING: UPDATE executed but 0 rows affected");
             throw new Exception("Failed to update appointment. No rows were changed.");
         }
         
     } catch (Exception $e) {
-        error_log("ERROR: " . $e->getMessage());
         $_SESSION['error'] = "❌ " . $e->getMessage();
     }
     
-    error_log("Redirecting to schedule.php?updated_id=$appointment_id");
     header("Location: " . BASE_URL . "/schedule?updated_id=" . urlencode($appointment_id));
     exit();
 }
@@ -309,7 +250,6 @@ try {
     $stmt->execute($params);
     $appointments = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) {
-    error_log("Query error: " . $e->getMessage());
     $appointments = [];
 }
 

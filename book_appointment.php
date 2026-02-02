@@ -153,6 +153,8 @@ if ($is_staff) {
     // Patients always get 1-hour slots - ignore their end time input
     $end = clone $start;
     $end->modify('+1 hour');
+
+    $_POST['end_time'] = $end->format('Y-m-d\TH:i');
 }
 
         // ============ HANDLE DENTIST ID WITH PRIORITY ============
@@ -666,10 +668,14 @@ const allDentistsData = <?= json_encode($all_dentists) ?>;
     </div>
 
     <div class="form-group" style="flex: 1;">
-        <label for="end_time">End Date & Time *</label>
+        <label for="end_time">End Date & Time * 
+            <?php if (!isset($_SESSION['dentist_id'])): ?>
+                <span style="font-size: 11px; color: #e67e22;">(Auto-set to 1 hour)</span>
+            <?php endif; ?>
+        </label>
         <input type="datetime-local" id="end_time" name="end_time" 
                required value="<?= htmlspecialchars($_POST['end_time'] ?? $pre_end) ?>"
-               <?= !isset($_SESSION['dentist_id']) ? 'readonly style="background-color: #f0f0f0; cursor: not-allowed;"' : '' ?>>
+               <?= !isset($_SESSION['dentist_id']) ? 'readonly style="background-color: #f8f9fa; cursor: not-allowed;"' : '' ?>>
     </div>
 </div>
 <?php if ($message): ?>
@@ -971,6 +977,52 @@ autoCalculateEndTime() {
         }, 3000);
     }
 }
+
+// Add this to your JavaScript
+document.addEventListener('DOMContentLoaded', function() {
+    const startInput = document.getElementById('start_time');
+    const endInput = document.getElementById('end_time');
+    const isDentist = <?= isset($_SESSION['dentist_id']) ? 'true' : 'false' ?>;
+
+    if (!isDentist && startInput && endInput) {
+        // Function to calculate end time (1 hour after start)
+        function updateEndTime() {
+            const startValue = startInput.value;
+            if (startValue) {
+                const startDate = new Date(startValue);
+                const endDate = new Date(startDate.getTime() + (60 * 60 * 1000)); // Add 1 hour
+                
+                // Format to YYYY-MM-DDTHH:mm for datetime-local input
+                const year = endDate.getFullYear();
+                const month = String(endDate.getMonth() + 1).padStart(2, '0');
+                const day = String(endDate.getDate()).padStart(2, '0');
+                const hours = String(endDate.getHours()).padStart(2, '0');
+                const minutes = String(endDate.getMinutes()).padStart(2, '0');
+                
+                endInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+            }
+        }
+
+        // Update end time when start time changes
+        startInput.addEventListener('change', updateEndTime);
+        startInput.addEventListener('input', updateEndTime);
+        
+        // Also update on page load
+        updateEndTime();
+        
+        // Make end time read-only with visual feedback
+        endInput.readOnly = true;
+        endInput.style.backgroundColor = '#f8f9fa';
+        endInput.style.cursor = 'not-allowed';
+        
+        // Prevent manual editing
+        endInput.addEventListener('focus', function(e) {
+            e.preventDefault();
+            this.blur();
+            alert("For patient bookings, appointments are fixed at 1 hour duration. The end time is automatically calculated.");
+        });
+    }
+});
 
 // Initialize when page loads
 document.addEventListener('DOMContentLoaded', () => {
