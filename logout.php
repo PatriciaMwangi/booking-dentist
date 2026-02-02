@@ -1,4 +1,5 @@
 <?php
+require_once 'db.php';
 // Start the session to gain access to it
 if (session_status() === PHP_SESSION_NONE) {
     session_start();

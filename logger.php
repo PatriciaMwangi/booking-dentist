@@ -1,5 +1,6 @@
 <?php
-function logActivity($pdo, $action, $description, $dentist_id = null) {
+function logActivity($action, $description, $dentist_id = null) {
+    global $pdo;
     
     try {
         $ip_address = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
@@ -25,30 +26,30 @@ function logActivity($pdo, $action, $description, $dentist_id = null) {
 }
 
 // Common log actions
-function logLogin($pdo, $dentist_id, $dentist_name) {
+function logLogin($dentist_id, $dentist_name) {
     return logActivity('LOGIN', "Dentist {$dentist_name} logged in", $dentist_id);
 }
 
-function logLogout($pdo, $dentist_id, $dentist_name) {
+function logLogout($dentist_id, $dentist_name) {
     return logActivity('LOGOUT', "Dentist {$dentist_name} logged out", $dentist_id);
 }
 
-function logAppointment($pdo, $dentist_id, $action, $appointment_id, $patient_name) {
+function logAppointment($dentist_id, $action, $appointment_id, $patient_name) {
     $description = "{$action} appointment #{$appointment_id} for patient {$patient_name}";
     return logActivity('APPOINTMENT', $description, $dentist_id);
 }
 
-function logPatient($pdo, $dentist_id, $action, $patient_name) {
+function logPatient($dentist_id, $action, $patient_name) {
     $description = "{$action} patient {$patient_name}";
     return logActivity('PATIENT', $description, $dentist_id);
 }
 
-function logDentist($pdo, $dentist_id, $action, $target_dentist_name) {
+function logDentist($dentist_id, $action, $target_dentist_name) {
     $description = "{$action} dentist {$target_dentist_name}";
     return logActivity('DENTIST', $description, $dentist_id);
 }
 
-function logService($pdo, $dentist_id, $action, $service_name) {
+function logService($dentist_id, $action, $service_name) {
     $description = "{$action} service: {$service_name}";
     return logActivity('SERVICE', $description, $dentist_id);
 }
