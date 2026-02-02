@@ -14,7 +14,7 @@ $password = getenv('DB_PASS') ?: '';
 
 try {
     // We added port=$port to the connection string
-    $dsn = "mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mbaa4";
+$dsn = "mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4";
     $pdo = new PDO($dsn, $username, $password);
     
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
