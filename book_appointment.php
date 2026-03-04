@@ -984,45 +984,53 @@ document.addEventListener('DOMContentLoaded', function() {
     const endInput = document.getElementById('end_time');
     const isDentist = <?= isset($_SESSION['dentist_id']) ? 'true' : 'false' ?>;
 
-    if (!isDentist && startInput && endInput) {
-        // Function to calculate end time (1 hour after start)
-        function updateEndTime() {
-            const startValue = startInput.value;
-            if (startValue) {
-                const startDate = new Date(startValue);
-                const endDate = new Date(startDate.getTime() + (60 * 60 * 1000)); // Add 1 hour
-                
-                // Format to YYYY-MM-DDTHH:mm for datetime-local input
-                const year = endDate.getFullYear();
-                const month = String(endDate.getMonth() + 1).padStart(2, '0');
-                const day = String(endDate.getDate()).padStart(2, '0');
-                const hours = String(endDate.getHours()).padStart(2, '0');
-                const minutes = String(endDate.getMinutes()).padStart(2, '0');
-                
-                endInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
-            }
-        }
-
-        // Update end time when start time changes
-        startInput.addEventListener('change', updateEndTime);
-        startInput.addEventListener('input', updateEndTime);
+   if (!isDentist && startInput && endInput) {
+    
+    function showToast() {
+        const toast = document.getElementById("toast-notice");
+        toast.style.visibility = "visible";
+        toast.style.opacity = "1";
         
-        // Also update on page load
-        updateEndTime();
-        
-        // Make end time read-only with visual feedback
-        endInput.readOnly = true;
-        endInput.style.backgroundColor = '#f8f9fa';
-        endInput.style.cursor = 'not-allowed';
-        
-        // Prevent manual editing
-        endInput.addEventListener('focus', function(e) {
-            e.preventDefault();
-            this.blur();
-            alert("For patient bookings, appointments are fixed at 1 hour duration. The end time is automatically calculated.");
-        });
+        // Hide it after 3 seconds
+        setTimeout(() => {
+            toast.style.opacity = "0";
+            setTimeout(() => { toast.style.visibility = "hidden"; }, 500);
+        }, 3000);
     }
-});
+
+    function updateEndTime() {
+        const startValue = startInput.value;
+        if (startValue) {
+            const startDate = new Date(startValue);
+            const endDate = new Date(startDate.getTime() + (60 * 60 * 1000));
+            
+            const year = endDate.getFullYear();
+            const month = String(endDate.getMonth() + 1).padStart(2, '0');
+            const day = String(endDate.getDate()).padStart(2, '0');
+            const hours = String(endDate.getHours()).padStart(2, '0');
+            const minutes = String(endDate.getMinutes()).padStart(2, '0');
+            
+            endInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+        }
+    }
+
+    // Standard logic
+    startInput.addEventListener('change', updateEndTime);
+    startInput.addEventListener('input', updateEndTime);
+    updateEndTime();
+
+    // Visual feedback for read-only
+    endInput.readOnly = true;
+    endInput.style.backgroundColor = '#f8f9fa';
+    endInput.style.cursor = 'not-allowed';
+    endInput.setAttribute('tabindex', '-1'); // Prevents tabbing in
+
+    // Touch-friendly notification trigger
+    endInput.addEventListener('pointerdown', function(e) {
+        e.preventDefault(); // Stops focus/keyboard
+        showToast();
+    });
+}
 
 // Initialize when page loads
 document.addEventListener('DOMContentLoaded', () => {
@@ -1045,17 +1053,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Prevent manual editing of end time for non-dentists
-        const endInput = document.getElementById('end_time');
-        endInput.addEventListener('focus', function(e) {
-            e.preventDefault();
-            this.blur();
-            alert("For patient bookings, appointments are fixed at 1 hour duration. The end time is automatically calculated.");
-        });
-        
+  // Prevent manual editing of end time for non-dentists
+const endInput = document.getElementById('end_time');
+endInput.addEventListener('focus', function(e) {
+    e.preventDefault();
+    this.blur();
+    showToast();
+                
         endInput.readOnly = true;
         endInput.style.backgroundColor = '#f8f9fa';
         endInput.style.cursor = 'not-allowed';
-    }
+    })
+}})
 });
 // Superintendent dentist search functionality
 
@@ -1303,5 +1312,23 @@ function getDentistNameById($dentist_id, $dentists) {
     return '';
 }
 ?>
+<div id="toast-notice" style="
+    visibility: hidden;
+    min-width: 250px;
+    background-color: #333;
+    color: #fff;
+    text-align: center;
+    border-radius: 8px;
+    padding: 16px;
+    position: fixed;
+    z-index: 1000;
+    left: 50%;
+    bottom: 30px;
+    transform: translateX(-50%);
+    font-family: sans-serif;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    transition: opacity 0.5s, visibility 0.5s;">
+    Appointments are fixed at 1 hour duration.
+</div>
 </body>
 </html>
