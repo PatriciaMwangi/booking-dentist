@@ -1,5 +1,5 @@
 {
     "require": {
-        "google/cloud-ai-platform": "^1.60"
+        "google/cloud-vertex-ai": "^0.1.0"
     }
 }

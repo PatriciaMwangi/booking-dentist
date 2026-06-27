@@ -4,43 +4,59 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-require 'vendor/autoload.php';
+// Ensure the autoloader path matches your file structure
+require_once __DIR__ . '/vendor/autoload.php';
 
-use Google\Cloud\AIPlatform\V1\PredictionServiceClient;
-use Google\Cloud\AIPlatform\V1\Client\PredictionServiceClient as PredictionClient;
+use Google\Cloud\VertexAI\V1\PredictionServiceClient;
 use Google\Protobuf\Value;
-
-// Initialize chat history array if it doesn't exist
-if (!isset($_SESSION['chat_history'])) {
-    $_SESSION['chat_history'] = [
-        ['sender' => 'bot', 'message' => 'Hello! I am your dental assistant. How can I help you today?']
-    ];
-}
+use Google\Protobuf\Struct;
 
 function askGeminiChatbot($userInput) {
     $projectId = 'dentistassistant-500509';
     $location = 'us-central1'; 
     $modelId = 'gemini-1.5-flash'; 
 
+    // Create the client
     $client = new PredictionServiceClient();
-    $endpoint = PredictionClient::endpointName($projectId, $location, $modelId);
+    
+    // Format the API endpoint string route matching Google's specifications
+    $endpoint = sprintf('projects/%s/locations/%s/publishers/google/models/%s', $projectId, $location, $modelId);
 
-    $systemInstruction = "You are a helpful dental clinic assistant. Only answer general dental info. Do not accept personal or health data. Keep answers short and professional.";
-    $fullPrompt = $systemInstruction . "\n\nUser: " . $userInput;
+    // Build the system instructions and user message context wrapper
+    $promptText = "You are a helpful dental clinic assistant. Only answer general dental info. Do not accept personal or health data.\n\nUser: " . $userInput;
+
+    // Set up the structural value parameter maps
+    $fields = [
+        'contents' => (new Value())->setStructValue(
+            (new Struct())->setFields([
+                'parts' => (new Value())->setListValue(
+                    (new \Google\Protobuf\ListValue())->setValues([
+                        (new Value())->setStructValue(
+                            (new Struct())->setFields([
+                                'text' => (new Value())->setStringValue($promptText)
+                            ])
+                        )
+                    ])
+                )
+            ])
+        )
+    ];
 
     $instance = new Value();
-    $instance->setStructValue(new \Google\Protobuf\Struct([
-        'fields' => [
-            'content' => (new Value())->setStringValue($fullPrompt)
-        ]
-    ]));
+    $instance->setStructValue((new Struct())->setFields($fields));
 
     try {
-        $response = $client->predict($endpoint, [$instance], []);
+        // Send request to Vertex AI endpoint
+        $response = $client->predict($endpoint, [$instance]);
         $predictions = $response->getPredictions();
-        return $predictions[0]->getStructValue()->getFields()['content']->getStringValue();
+        
+        // Parse the returned generation content out of the response map
+        $candidates = $predictions[0]->getStructValue()->getFields()['candidates']->getListValue()->getValues();
+        $textResult = $candidates[0]->getStructValue()->getFields()['content']->getStructValue()->getFields()['parts']->getListValue()->getValues()[0]->getStructValue()->getFields()['text']->getStringValue();
+        
+        return $textResult;
     } catch (Exception $e) {
-        return "Sorry, I am having trouble connecting to my system right now. Please try again later.";
+        return "Sorry, I am having trouble connecting to my system right now.";
     }
 }
 
