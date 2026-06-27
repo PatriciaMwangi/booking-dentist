@@ -428,29 +428,26 @@ $stmt->execute([
 
 <div class="form-container">
   <?php if (!isset($_SESSION['dentist_id'])): ?>
-    <div class="flex items-center space-x-3">
-  <div class="relative flex items-center justify-center w-12 h-12 rounded-full bg-sky-100 border-2 border-sky-500 shadow-sm shadow-sky-100">
-    <svg class="w-8 h-8 text-slate-700" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-      <path d="M 35,30 C 35,22 45,22 45,32 L 45,45 C 45,55 55,55 55,45 L 55,32 C 55,22 65,22 65,30" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-      <circle cx="35" cy="30" r="3" fill="currentColor"/>
-      <circle cx="65" cy="30" r="3" fill="currentColor"/>
-      <path d="M 50,50 L 50,65" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-      <rect x="42" y="65" width="16" height="6" rx="2" fill="#94a3b8" stroke="currentColor" stroke-width="2"/>
-      <circle cx="50" cy="76" r="8" fill="#cbd5e1" stroke="currentColor" stroke-width="3"/>
-    </svg>
-    <span class="absolute bottom-0 right-0 block h-3 w-3 rounded-full bg-green-400 ring-2 ring-white"></span>
-  </div>
-  
-  <div>
-    <p class="text-sm font-semibold text-slate-800">Dental Assistant</p>
-    <p class="text-xs text-green-500 font-medium">Online</p>
-  </div>
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+    <a href="chatbot.php" style="display: flex; align-items: center; gap: 6px; text-decoration: none; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+        <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px;">
+            <svg style="width: 20px; height: 20px; color: #475569;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+                <path d="M 35,30 C 35,22 45,22 45,32 L 45,45 C 45,55 55,55 55,45 L 55,32 C 55,22 65,22 65,30" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+                <circle cx="35" cy="30" r="4" fill="currentColor"/>
+                <circle cx="65" cy="30" r="4" fill="currentColor"/>
+                <path d="M 50,50 L 50,65" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+                <rect x="40" y="65" width="20" height="7" rx="2" fill="#94a3b8" stroke="currentColor" stroke-width="3"/>
+                <circle cx="50" cy="78" r="9" fill="#cbd5e1" stroke="currentColor" stroke-width="4"/>
+            </svg>
+            <span style="position: absolute; bottom: 0; right: 0; display: block; width: 6px; height: 6px; border-radius: 50%; background-color: #4ade80; box-shadow: 0 0 0 1px #fff;"></span>
+        </div>
+        <span style="font-size: 13px; font-weight: 500; color: #64748b; font-family: sans-serif;">Chat Support</span>
+    </a>
+
+    <a href="login.php" style="text-decoration: none; font-size: 14px; color: #3498db; border: 1px solid #3498db; padding: 5px 10px; border-radius: 4px;">
+        Dentist Login
+    </a>
 </div>
-    <div style="text-align: right; margin-bottom: 10px;">
-        <a href="login.php" style="text-decoration: none; font-size: 14px; color: #3498db; border: 1px solid #3498db; padding: 5px 10px; border-radius: 4px;">
-            Dentist Login
-        </a>
-    </div>
 <?php else: ?>
     <div style="text-align: right; margin-bottom: 10px;">
         <a href="dentist.php" style="text-decoration: none; font-size: 14px; color: #3498db; border: 1px solid #3498db; padding: 5px 10px; border-radius: 4px;">
