@@ -12,7 +12,7 @@ use Google\Cloud\VertexAI\VertexAI;
 function askGeminiChatbot($userInput) {
     $projectId = 'dentistassistant-500521';
     $location  = 'us-central1';
-    $modelId   = 'gemini-1.5-flash';
+    $modelId   = 'gemini-2.5-flash';
 
     $credentialsArray = json_decode(getenv('GOOGLE_CREDENTIALS_JSON'), true);
 
