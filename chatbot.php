@@ -4,10 +4,11 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Ensure the autoloader path matches your file structure
+// Absolute path safe for local environments and Render container paths
 require_once __DIR__ . '/vendor/autoload.php';
 
-use Google\Cloud\VertexAI\V1\PredictionServiceClient;
+use Google\Cloud\AIPlatform\V1\Client\PredictionServiceClient;
+use Google\Cloud\AIPlatform\V1\PredictRequest;
 use Google\Protobuf\Value;
 use Google\Protobuf\Struct;
 
@@ -16,45 +17,34 @@ function askGeminiChatbot($userInput) {
     $location = 'us-central1'; 
     $modelId = 'gemini-1.5-flash'; 
 
-    // Create the client
+    // Create the client matching version 1.60 conventions
     $client = new PredictionServiceClient();
     
-    // Format the API endpoint string route matching Google's specifications
+    // Format the official API endpoint string path
     $endpoint = sprintf('projects/%s/locations/%s/publishers/google/models/%s', $projectId, $location, $modelId);
 
-    // Build the system instructions and user message context wrapper
+    // Structure the input message text wrapper
     $promptText = "You are a helpful dental clinic assistant. Only answer general dental info. Do not accept personal or health data.\n\nUser: " . $userInput;
 
-    // Set up the structural value parameter maps
-    $fields = [
-        'contents' => (new Value())->setStructValue(
-            (new Struct())->setFields([
-                'parts' => (new Value())->setListValue(
-                    (new \Google\Protobuf\ListValue())->setValues([
-                        (new Value())->setStructValue(
-                            (new Struct())->setFields([
-                                'text' => (new Value())->setStringValue($promptText)
-                            ])
-                        )
-                    ])
-                )
-            ])
-        )
-    ];
+    // Correct payload format mapping for predict requests
+    $promptStruct = new Struct();
+    $promptStruct->setFields([
+        'content' => (new Value())->setStringValue($promptText)
+    ]);
 
     $instance = new Value();
-    $instance->setStructValue((new Struct())->setFields($fields));
+    $instance->setStructValue($promptStruct);
+
+    // Build formal V1 predict execution instance
+    $request = (new PredictRequest())
+        ->getEndpoint($endpoint)
+        ->setInstances([$instance]);
 
     try {
-        // Send request to Vertex AI endpoint
-        $response = $client->predict($endpoint, [$instance]);
+        $response = $client->predict($request);
         $predictions = $response->getPredictions();
         
-        // Parse the returned generation content out of the response map
-        $candidates = $predictions[0]->getStructValue()->getFields()['candidates']->getListValue()->getValues();
-        $textResult = $candidates[0]->getStructValue()->getFields()['content']->getStructValue()->getFields()['parts']->getListValue()->getValues()[0]->getStructValue()->getFields()['text']->getStringValue();
-        
-        return $textResult;
+        return $predictions[0]->getStructValue()->getFields()['content']->getStringValue();
     } catch (Exception $e) {
         return "Sorry, I am having trouble connecting to my system right now.";
     }

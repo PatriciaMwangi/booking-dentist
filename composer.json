@@ -1,5 +1,6 @@
 {
     "require": {
-        "google/cloud-vertex-ai": "^0.1.0"
+        "php": "^8.2",
+        "google/cloud-ai-platform": "^1.60"
     }
 }
