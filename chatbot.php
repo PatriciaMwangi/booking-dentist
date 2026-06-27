@@ -7,15 +7,12 @@ if (session_status() === PHP_SESSION_NONE) {
 // Absolute path safe for local environments and Render container paths
 require_once __DIR__ . '/vendor/autoload.php';
 
-use Google\Cloud\AIPlatform\V1\Client\PredictionServiceClient;
-use Google\Cloud\AIPlatform\V1\PredictRequest;
-use Google\Protobuf\Value;
-use Google\Protobuf\Struct;
+use Google\Cloud\VertexAI\VertexAI;
 
 function askGeminiChatbot($userInput) {
     $projectId = 'dentistassistant-500521';
     $location  = 'us-central1';
-    $modelId   = 'gemini-2.5-flash';
+    $modelId   = 'gemini-1.5-flash';
 
     $credentialsArray = json_decode(getenv('GOOGLE_CREDENTIALS_JSON'), true);
 
@@ -23,36 +20,66 @@ function askGeminiChatbot($userInput) {
         return "Error: Credentials not configured.";
     }
 
-    $client = new PredictionServiceClient([
-        'credentials' => $credentialsArray,
-        'apiEndpoint' => "$location-aiplatform.googleapis.com",
+    // Get access token from service account credentials
+    $accessToken = getGoogleAccessToken($credentialsArray);
+
+    $url = "https://$location-aiplatform.googleapis.com/v1/projects/$projectId/locations/$location/publishers/google/models/$modelId:generateContent";
+
+    $prompt = "You are a helpful dental clinic assistant. Only answer general dental info. Do not accept personal or health data.\n\nUser: " . $userInput;
+
+    $payload = json_encode([
+        'contents' => [
+            ['role' => 'user', 'parts' => [['text' => $prompt]]]
+        ]
     ]);
 
-    $endpoint = "projects/$projectId/locations/$location/publishers/google/models/gemini-2.5-flash";
-
-    $promptText = "You are a helpful dental clinic assistant. Only answer general dental info. Do not accept personal or health data.\n\nUser: " . $userInput;
-
-    $promptStruct = new Struct();
-    $promptStruct->setFields([
-        'content' => (new Value())->setStringValue($promptText)
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => $payload,
+        CURLOPT_HTTPHEADER     => [
+            "Authorization: Bearer $accessToken",
+            "Content-Type: application/json"
+        ]
     ]);
 
-    $instance = new Value();
-    $instance->setStructValue($promptStruct);
+    $result = curl_exec($ch);
+    curl_close($ch);
 
-    $request = (new PredictRequest())
-        ->setEndpoint($endpoint)
-        ->setInstances([$instance]);
+    $data = json_decode($result, true);
+    return $data['candidates'][0]['content']['parts'][0]['text'] ?? "Sorry, no response received.";
+}
 
-    try {
-        $response = $client->predict($request);
-        $predictions = $response->getPredictions();
-        return $predictions[0]->getStructValue()->getFields()['content']->getStringValue();
-    } catch (Exception $e) {
-        return "Error: " . $e->getMessage();
-    } finally {
-        $client->close();
-    }
+function getGoogleAccessToken($credentials) {
+    $now = time();
+    $header = base64_encode(json_encode(['alg' => 'RS256', 'typ' => 'JWT']));
+    $payload = base64_encode(json_encode([
+        'iss' => $credentials['client_email'],
+        'scope' => 'https://www.googleapis.com/auth/cloud-platform',
+        'aud' => 'https://oauth2.googleapis.com/token',
+        'exp' => $now + 3600,
+        'iat' => $now
+    ]));
+
+    $signature = '';
+    openssl_sign("$header.$payload", $signature, $credentials['private_key'], 'SHA256');
+    $jwt = "$header.$payload." . base64_encode($signature);
+
+    $ch = curl_init('https://oauth2.googleapis.com/token');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => http_build_query([
+            'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+            'assertion'  => $jwt
+        ])
+    ]);
+
+    $response = json_decode(curl_exec($ch), true);
+    curl_close($ch);
+
+    return $response['access_token'];
 }
 
 // Handle Form Submission
