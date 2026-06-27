@@ -15,7 +15,7 @@ use Google\Protobuf\Struct;
 function askGeminiChatbot($userInput) {
     $projectId = 'dentistassistant-500521';
     $location  = 'us-central1';
-    $modelId   = 'gemini-1.5-flash';
+    $modelId   = 'gemini-2.0-flash';
 
     $credentialsArray = json_decode(getenv('GOOGLE_CREDENTIALS_JSON'), true);
 
@@ -28,7 +28,7 @@ function askGeminiChatbot($userInput) {
         'apiEndpoint' => "$location-aiplatform.googleapis.com",
     ]);
 
-    $endpoint = "projects/$projectId/locations/$location/publishers/google/models/$modelId";
+    $endpoint = "projects/$projectId/locations/$location/publishers/google/models/gemini-1.5-flash-001";
 
     $promptText = "You are a helpful dental clinic assistant. Only answer general dental info. Do not accept personal or health data.\n\nUser: " . $userInput;
 
