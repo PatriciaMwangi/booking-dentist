@@ -13,7 +13,7 @@ use Google\Protobuf\Value;
 use Google\Protobuf\Struct;
 
 function askGeminiChatbot($userInput) {
-    $projectId = 'dentistassistant-500509';
+    $projectId = 'dentistassistant-500521';
     $location  = 'us-central1';
     $modelId   = 'gemini-1.5-flash';
 
