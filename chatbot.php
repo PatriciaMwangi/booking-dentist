@@ -17,21 +17,17 @@ function askGeminiChatbot($userInput) {
     $location  = 'us-central1';
     $modelId   = 'gemini-1.5-flash';
 
-       // Read and decode the JSON ourselves — bypass the library's file_get_contents
-    $credentialsPath = getenv('GOOGLE_APPLICATION_CREDENTIALS');
-    $credentialsJson = file_get_contents($credentialsPath);
-    
-    if (!$credentialsJson) {
-        return "Error: Could not read credentials file.";
+    $credentialsArray = json_decode(getenv('GOOGLE_CREDENTIALS_JSON'), true);
+
+    if (!$credentialsArray) {
+        return "Error: Credentials not configured.";
     }
-    
-    $credentialsArray = json_decode($credentialsJson, true);
 
     $client = new PredictionServiceClient([
-        'credentials' => $credentialsArray,  // pass decoded array, not path
+        'credentials' => $credentialsArray,
         'apiEndpoint' => "$location-aiplatform.googleapis.com",
     ]);
-    
+
     $endpoint = "projects/$projectId/locations/$location/publishers/google/models/$modelId";
 
     $promptText = "You are a helpful dental clinic assistant. Only answer general dental info. Do not accept personal or health data.\n\nUser: " . $userInput;
