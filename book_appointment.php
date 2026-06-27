@@ -429,7 +429,7 @@ $stmt->execute([
 <div class="form-container">
   <?php if (!isset($_SESSION['dentist_id'])): ?>
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-    <a href="chatbot.php" style="display: flex; align-items: center; gap: 6px; text-decoration: none; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+    <a href="dental-assistant" style="display: flex; align-items: center; gap: 6px; text-decoration: none; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
         <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px;">
             <svg style="width: 20px; height: 20px; color: #475569;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
                 <path d="M 35,30 C 35,22 45,22 45,32 L 45,45 C 45,55 55,55 55,45 L 55,32 C 55,22 65,22 65,30" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
@@ -444,7 +444,7 @@ $stmt->execute([
         <span style="font-size: 13px; font-weight: 500; color: #64748b; font-family: sans-serif;">Chat Support</span>
     </a>
 
-    <a href="login.php" style="text-decoration: none; font-size: 14px; color: #3498db; border: 1px solid #3498db; padding: 5px 10px; border-radius: 4px;">
+    <a href="chatbot.php" style="text-decoration: none; font-size: 14px; color: #3498db; border: 1px solid #3498db; padding: 5px 10px; border-radius: 4px;">
         Dentist Login
     </a>
 </div>
