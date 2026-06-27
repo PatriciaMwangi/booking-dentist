@@ -4,6 +4,18 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// 1. Check if the raw JSON environment variable exists
+if (getenv('GOOGLE_CREDENTIALS_JSON')) {
+    $tempKeyPath = '/tmp/google-credentials.json';
+    
+    // Dynamically write the file to a location Apache fully owns and controls
+    if (!file_exists($tempKeyPath)) {
+        file_put_contents($tempKeyPath, getenv('GOOGLE_CREDENTIALS_JSON'));
+    }
+    
+    // Explicitly tell Google's Auth library to use this clean path instead
+    putenv("GOOGLE_APPLICATION_CREDENTIALS=" . $tempKeyPath);
+}
 // Absolute path safe for local environments and Render container paths
 require_once __DIR__ . '/vendor/autoload.php';
 
