@@ -17,20 +17,11 @@ function askGeminiChatbot($userInput) {
     $location  = 'us-central1';
     $modelId   = 'gemini-1.5-flash';
 
-    // Write credentials to /tmp BEFORE constructing the client
-    $tempKeyPath = '/tmp/google-credentials.json';
-    $rawJson = getenv('GOOGLE_CREDENTIALS_JSON');
+    // Render provides the file + env var already — just use it directly
+    $credentialsPath = getenv('GOOGLE_APPLICATION_CREDENTIALS');
 
-    if (!$rawJson) {
-        return "Error: GOOGLE_CREDENTIALS_JSON environment variable is not set.";
-    }
-
-    file_put_contents($tempKeyPath, $rawJson);
-    chmod($tempKeyPath, 0600);
-
-    // Pass credentials directly into the client — bypass ADC entirely
     $client = new PredictionServiceClient([
-        'credentials' => $tempKeyPath,
+        'credentials' => $credentialsPath,
         'apiEndpoint' => "$location-aiplatform.googleapis.com",
     ]);
 
@@ -47,7 +38,7 @@ function askGeminiChatbot($userInput) {
     $instance->setStructValue($promptStruct);
 
     $request = (new PredictRequest())
-        ->setEndpoint($endpoint)   // <-- was ->getEndpoint() — that's also a bug!
+        ->setEndpoint($endpoint)
         ->setInstances([$instance]);
 
     try {
