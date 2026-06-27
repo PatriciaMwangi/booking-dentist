@@ -4,18 +4,6 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// 1. Check if the raw JSON environment variable exists
-if (getenv('GOOGLE_CREDENTIALS_JSON')) {
-    $tempKeyPath = '/tmp/google-credentials.json';
-    
-    // Dynamically write the file to a location Apache fully owns and controls
-    if (!file_exists($tempKeyPath)) {
-        file_put_contents($tempKeyPath, getenv('GOOGLE_CREDENTIALS_JSON'));
-    }
-    
-    // Explicitly tell Google's Auth library to use this clean path instead
-    putenv("GOOGLE_APPLICATION_CREDENTIALS=" . $tempKeyPath);
-}
 // Absolute path safe for local environments and Render container paths
 require_once __DIR__ . '/vendor/autoload.php';
 
@@ -26,19 +14,30 @@ use Google\Protobuf\Struct;
 
 function askGeminiChatbot($userInput) {
     $projectId = 'dentistassistant-500509';
-    $location = 'us-central1'; 
-    $modelId = 'gemini-1.5-flash'; 
+    $location  = 'us-central1';
+    $modelId   = 'gemini-1.5-flash';
 
-    // Create the client matching version 1.60 conventions
-    $client = new PredictionServiceClient();
-    
-    // Format the official API endpoint string path
-    $endpoint = sprintf('projects/%s/locations/%s/publishers/google/models/%s', $projectId, $location, $modelId);
+    // Write credentials to /tmp BEFORE constructing the client
+    $tempKeyPath = '/tmp/google-credentials.json';
+    $rawJson = getenv('GOOGLE_CREDENTIALS_JSON');
 
-    // Structure the input message text wrapper
+    if (!$rawJson) {
+        return "Error: GOOGLE_CREDENTIALS_JSON environment variable is not set.";
+    }
+
+    file_put_contents($tempKeyPath, $rawJson);
+    chmod($tempKeyPath, 0600);
+
+    // Pass credentials directly into the client — bypass ADC entirely
+    $client = new PredictionServiceClient([
+        'credentials' => $tempKeyPath,
+        'apiEndpoint' => "$location-aiplatform.googleapis.com",
+    ]);
+
+    $endpoint = "projects/$projectId/locations/$location/publishers/google/models/$modelId";
+
     $promptText = "You are a helpful dental clinic assistant. Only answer general dental info. Do not accept personal or health data.\n\nUser: " . $userInput;
 
-    // Correct payload format mapping for predict requests
     $promptStruct = new Struct();
     $promptStruct->setFields([
         'content' => (new Value())->setStringValue($promptText)
@@ -47,18 +46,18 @@ function askGeminiChatbot($userInput) {
     $instance = new Value();
     $instance->setStructValue($promptStruct);
 
-    // Build formal V1 predict execution instance
     $request = (new PredictRequest())
-        ->getEndpoint($endpoint)
+        ->setEndpoint($endpoint)   // <-- was ->getEndpoint() — that's also a bug!
         ->setInstances([$instance]);
 
     try {
         $response = $client->predict($request);
         $predictions = $response->getPredictions();
-        
         return $predictions[0]->getStructValue()->getFields()['content']->getStringValue();
     } catch (Exception $e) {
-        return "Sorry, I am having trouble connecting to my system right now.";
+        return "Error: " . $e->getMessage();
+    } finally {
+        $client->close();
     }
 }
 
