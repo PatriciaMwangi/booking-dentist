@@ -1,0 +1,32 @@
+<?php
+require_once 'db.php';
+// Start the session to gain access to it
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+if (isset($_SESSION['dentist_id'])) {
+require_once __DIR__ . '/../Home/logsAndDebugs/logger.php';
+    logLogout($_SESSION['dentist_id'], $_SESSION['dentist_name'] ?? 'Unknown');
+}
+
+// Clear all session variables
+$_SESSION = array();
+
+// If it's desired to kill the session, also delete the session cookie.
+// This is more secure than just session_destroy()
+if (ini_get("session.use_cookies")) {
+    $params = session_get_cookie_params();
+    setcookie(session_name(), '', time() - 42000,
+        $params["path"], $params["domain"],
+        $params["secure"], $params["httponly"]
+    );
+}
+
+// Finally, destroy the session.
+session_destroy();
+
+// Redirect to the login page
+    header("Location: " . BASE_URL . "/login"); 
+exit();
+?>

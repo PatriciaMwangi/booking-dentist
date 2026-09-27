@@ -1,12 +1,11 @@
-# --- Database & Security ---
-config.php
+# PHP dependencies
+/vendor/
 
-# --- Logs & Error Reports ---
-*.log
-error_log
-npm-debug.log*
-
-# --- Environment Files ---
+# Environment / secrets
 .env
-.env.local
 
+# Local RAG database
+/rag/data/*.sqlite
+
+# Optional: local logs
+*.log

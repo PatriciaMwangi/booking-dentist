@@ -1,6 +1,6 @@
 {
     "require": {
         "php": "^8.2",
-        "google/cloud-ai-platform": "^1.60"
+        "prinsfrank/pdfparser": "^2.1"
     }
 }

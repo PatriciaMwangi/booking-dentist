@@ -1,5 +1,5 @@
 <?php
-require_once 'env_loader.php';
+require_once __DIR__ . '/env_loader.php';
 
 if (file_exists(__DIR__ . '/.env')) {
     loadEnv(__DIR__ . '/.env');

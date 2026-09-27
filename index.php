@@ -1,75 +1,139 @@
 <?php
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
+/**
+ * index.php
+ *
+ * Main entry point / router for the Booking Dentist application.
+ */
 
-session_start();
-define('APP_RUNNING', true);
+// ============================================================
+// 1. LOAD CONFIGURATION
+// ============================================================
 
-// 1. DYNAMIC BASE PATH DETECTION
-// This detects "/booking-dentist" on XAMPP and "" (empty) on Render
-$base_dir = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/'); 
+require_once __DIR__ . '/config.php';
 
-// 2. DEFINE A GLOBAL BASE URL
-// Detect if HTTPS is used directly or via Render's proxy header
-$is_https = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') || 
-             (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https');
 
-$protocol = $is_https ? 'https' : 'http';
-$base_url = $protocol . "://" . $_SERVER['HTTP_HOST'] . $base_dir;
-define('BASE_URL', $base_url);
+// ============================================================
+// 2. GET REQUESTED ROUTE
+// ============================================================
 
-// 3. STRIP BASE DIR FROM REQUEST
-$request_uri = $_SERVER['REQUEST_URI'];
-if ($base_dir !== '' && strpos($request_uri, $base_dir) === 0) {
-    $request_uri = substr($request_uri, strlen($base_dir));
+$requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+
+// Remove leading/trailing slashes.
+$route = trim($requestUri, '/');
+
+
+// ============================================================
+// 3. HANDLE ROOT ROUTE
+// ============================================================
+
+if ($route === '') {
+    $route = '';
 }
-$path = trim(explode('?', $request_uri)[0], '/');
 
-// 4. ROUTE DEFINITIONS
-$protected_routes = [
-    'calendar-data' => 'calendar.php',
-    'schedule'        => 'schedule.php',
-    'services' => 'manage_services.php',
-    'calendar'        => 'dentist.php',
-    'dentists'        => 'view_dentists.php',
-    'new-dentist'     =>'register_dentists.php',
-    'patients'    => 'patients.php',
-    'test_patients' => 'test_patients.php',
-    'patient_history' => 'patient_history.php',
-    'logs' =>'manage_logs.php',
-    'dentist_specializations' => 'dentist_specializations.php',
-    'profile' => 'profile.php',
-    'debug-appointments' => 'debug-appointments.php',
-    'check-dentist-appointments' => 'check_dentist_appointments.php',
-    'delete_dentist' =>'delete_dentist.php',
-    'toggle_dentist_status' => 'toggle_dentist_status.php',
-    'get-dentists-for-service' => 'get_dentists_for_service.php',
 
-];
+// ============================================================
+// 4. CHECK PUBLIC ROUTES
+// ============================================================
 
-$public_routes = [
-    'login' => 'login.php',
-    'logout' => 'logout.php',
-    ''      => 'book_appointment.php',
-    'fetch-patient' => 'ajax_fetch_patient.php', 
-    'get_duty_status' => 'get_duty_status.php',
-    'dental-assistant' => 'chatbot.php'
-];
+if (array_key_exists($route, $public_routes)) {
 
-// 5. ROUTING LOGIC
-if (array_key_exists($path, $protected_routes)) {
-    if (!isset($_SESSION['dentist_id'])) {
-        header("Location: " . BASE_URL . "/login");
-        exit();
+    $file = __DIR__ . '/' . $public_routes[$route];
+
+    if (file_exists($file)) {
+        require $file;
+        exit;
     }
-    include $protected_routes[$path];
-} 
-elseif (array_key_exists($path, $public_routes)) {
-    include $public_routes[$path];
-} 
-else {
-    // Default Fallback
-    header("Location: " . BASE_URL . (isset($_SESSION['dentist_id']) ? "/calendar" : "/login"));
-    exit();
+
+    http_response_code(500);
+    echo "Route file not found.";
+    exit;
 }
+
+
+// ============================================================
+// 5. CHECK PROTECTED ROUTES
+// ============================================================
+
+if (array_key_exists($route, $protected_routes)) {
+
+    // --------------------------------------------------------
+    // Require authentication
+    // --------------------------------------------------------
+
+    if (!isset($_SESSION['dentist_id'])) {
+
+        header('Location: ' . BASE_URL . '/login');
+        exit;
+    }
+
+
+    // --------------------------------------------------------
+    // Route to requested PHP file
+    // --------------------------------------------------------
+
+    $file = __DIR__ . '/' . $protected_routes[$route];
+
+    if (file_exists($file)) {
+        require $file;
+        exit;
+    }
+
+    http_response_code(500);
+    echo "Protected route file not found.";
+    exit;
+}
+
+
+// ============================================================
+// 6. ROUTE NOT FOUND
+// ============================================================
+
+http_response_code(404);
+
+echo <<<HTML
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>404 - Page Not Found</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 60px 20px;
+        }
+
+        h1 {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+
+        p {
+            color: #666;
+        }
+
+        a {
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>404</h1>
+
+    <h2>Page Not Found</h2>
+
+    <p>
+        The page you requested does not exist.
+    </p>
+
+    <a href="/">
+        Return to homepage
+    </a>
+
+</body>
+</html>
+HTML;
+
+exit;
