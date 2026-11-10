@@ -23,4 +23,7 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction
 # 6. Enable Apache mod_rewrite for router support
 RUN a2enmod rewrite
 
+# Let Apache listen on Vercel's $PORT (default 80)
+RUN sed -i 's/Listen 80/Listen ${PORT}/' /etc/apache2/ports.conf
+
 EXPOSE 80
